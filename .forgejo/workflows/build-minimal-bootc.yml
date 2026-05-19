@@ -1,0 +1,185 @@
+name: Build Fedora Minimal Bootc
+
+on:
+  workflow_dispatch:
+    inputs:
+      versions_override:
+        description: 'JSON array of Fedora versions to build, e.g. [44] (empty = use fedora-versions.yml)'
+        required: false
+        default: ''
+        type: string
+
+  # Auto-triggers (push) intentionally omitted until a native:host runner is
+  # connected. Run manually via workflow_dispatch for now.
+
+concurrency:
+  group: build-minimal-bootc-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: fedora-bootc-minimal
+  # Plain-HTTP registry shared with the justfile (registry.local:5000).
+  REGISTRY: registry.local:5000
+
+jobs:
+  setup:
+    runs-on: native
+    outputs:
+      versions: ${{ steps.r.outputs.versions }}
+      stable: ${{ steps.r.outputs.stable }}
+      rechunker: ${{ steps.r.outputs.rechunker }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: r
+        run: |
+          command -v yq >/dev/null || sudo dnf install -y yq
+          if [ -n "${{ inputs.versions_override }}" ]; then
+            echo "versions=${{ inputs.versions_override }}"
+          else
+            echo "versions=$(yq -o=json -I=0 '.supported' fedora-versions.yml)"
+          fi >> "$GITHUB_OUTPUT"
+          {
+            echo "stable=$(yq '.stable' fedora-versions.yml)"
+            echo "rechunker=$(yq '.rechunker' fedora-versions.yml)"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: setup
+    runs-on: native
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora_version: ${{ fromJson(needs.setup.outputs.versions) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve build parameters
+        id: params
+        run: |
+          TAG=$(date +%Y%m%d-%H%M)
+          {
+            echo "tag=${TAG}"
+            echo "image_base=${REGISTRY}/${IMAGE_NAME}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        run: |
+          if ! command -v cosign >/dev/null; then
+            sudo curl -fsSL \
+              https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+              -o /usr/local/bin/cosign
+            sudo chmod +x /usr/local/bin/cosign
+          fi
+          cosign version
+
+      - name: Render policy.json
+        run: |
+          # The placeholder governs the trusted namespace baked into the image;
+          # registry.local images carry no namespace, so this stays as-is for
+          # any ghcr.io mirror and the registry.local rule is matched literally.
+          sed -e "s|__REGISTRY_NAMESPACE__|bensmith|g" \
+              policy-minimal.json.template > policy.json
+          cat policy.json
+
+      - name: Clone Fedora bootc manifests
+        run: |
+          rm -rf manifests
+          git clone --depth 1 https://gitlab.com/fedora/bootc/base-images.git manifests
+          git -C manifests log -1
+          cp policy.json manifests/policy.json
+          cp cosign.pub manifests/cosign.pub
+
+      - name: Build minimal bootc image
+        env:
+          VERSION: ${{ matrix.fedora_version }}
+        run: |
+          sudo podman build \
+            --security-opt=label=disable \
+            --cap-add=all \
+            --device /dev/fuse \
+            -f fedora-bootc-minimal.Containerfile \
+            --build-arg MANIFEST=minimal \
+            --build-arg BUILDER_IMAGE=quay.io/fedora/fedora:${VERSION} \
+            --build-arg REPOS_IMAGE=quay.io/fedora/fedora:${VERSION} \
+            -t localhost/${IMAGE_NAME}:build \
+            manifests
+          sudo podman inspect localhost/${IMAGE_NAME}:build > /dev/null
+
+      - name: Rechunk image
+        env:
+          RECHUNKER: ${{ needs.setup.outputs.rechunker }}
+        run: |
+          sudo podman run --rm --privileged \
+            -v /var/lib/containers:/var/lib/containers \
+            quay.io/fedora/fedora-bootc:${RECHUNKER} \
+            /usr/libexec/bootc-base-imagectl rechunk \
+            localhost/${IMAGE_NAME}:build \
+            localhost/${IMAGE_NAME}:rechunked
+
+      - name: Tag and push
+        id: push
+        env:
+          IMAGE_BASE: ${{ steps.params.outputs.image_base }}
+          VERSION: ${{ matrix.fedora_version }}
+          TAG: ${{ steps.params.outputs.tag }}
+          STABLE: ${{ needs.setup.outputs.stable }}
+        run: |
+          TAGS=("${VERSION}-${TAG}" "${VERSION}")
+          if [ "${VERSION}" = "${STABLE}" ]; then
+            TAGS+=("latest")
+          fi
+
+          FIRST=true
+          for t in "${TAGS[@]}"; do
+            sudo podman tag localhost/${IMAGE_NAME}:rechunked "${IMAGE_BASE}:${t}"
+            if [ "${FIRST}" = "true" ]; then
+              sudo podman push --tls-verify=false \
+                --digestfile /tmp/digest.txt "${IMAGE_BASE}:${t}"
+              FIRST=false
+            else
+              sudo podman push --tls-verify=false "${IMAGE_BASE}:${t}"
+            fi
+          done
+
+          DIGEST=$(cat /tmp/digest.txt)
+          {
+            printf 'tags<<EOF\n%s\nEOF\n' "${TAGS[*]}"
+            echo "digest=${DIGEST}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sign images
+        # Best-effort: sign if a key is configured and cosign succeeds,
+        # but never fail the build over signing.
+        continue-on-error: true
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_SECRET }}
+          IMAGE_BASE: ${{ steps.params.outputs.image_base }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          if [ -z "${COSIGN_PRIVATE_KEY:-}" ]; then
+            echo "COSIGN_SECRET not set — skipping image signing."
+            exit 0
+          fi
+          cosign sign -y \
+            --key env://COSIGN_PRIVATE_KEY \
+            --tlog-upload=false \
+            --allow-http-registry \
+            --allow-insecure-registry \
+            "${IMAGE_BASE}@${DIGEST}"
+
+      - name: Summary
+        env:
+          IMAGE_BASE: ${{ steps.params.outputs.image_base }}
+          TAGS: ${{ steps.push.outputs.tags }}
+        run: |
+          {
+            echo "## Minimal bootc build complete (F${{ matrix.fedora_version }})"
+            echo ""
+            echo "Pushed and signed:"
+            for t in $TAGS; do
+              echo "- \`${IMAGE_BASE}:${t}\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

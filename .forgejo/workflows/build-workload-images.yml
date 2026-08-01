@@ -29,6 +29,12 @@ on:
     branches: [main]
     paths:
       - 'workloadctl/workloads/**'
+      # Docs never reach an image, so a README edit should not trigger a build
+      # + signing round that moves :latest to a new digest for no content
+      # change. Belt and braces: ci-workload-images.py applies the same rule
+      # when it computes the matrix, so if this negation is not honoured the
+      # run still resolves to an empty matrix and skips the build job.
+      - '!workloadctl/workloads/**/*.md'
       - '.forgejo/workflows/build-workload-images.yml'
       - '.forgejo/scripts/ci-workload-images.py'
       - '.forgejo/scripts/ci-scan.py'

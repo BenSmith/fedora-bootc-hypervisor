@@ -208,7 +208,19 @@ def cmd_list() -> int:
     elif os.environ.get("CHANGED_FILES", "").strip():
         touched = set()
         for line in os.environ["CHANGED_FILES"].splitlines():
-            parts = Path(line.strip()).parts
+            path = Path(line.strip())
+            # Markdown is documentation — it never reaches an image. A bundle's
+            # Containerfiles COPY named files, and imagebuild strips control
+            # files from the context, so a README edit cannot change a layer.
+            # Rebuilding on one costs a full build + cosign signing round and
+            # moves :latest to a new digest that every host then pulls, for no
+            # difference in content. This is the load-bearing half of the
+            # filter: the workflow's `paths:` negation (if the runner honours
+            # it) stops the run from starting at all, but when it does start,
+            # an empty matrix here makes it a clean no-op via `any=false`.
+            if path.suffix.lower() == ".md":
+                continue
+            parts = path.parts
             # workloadctl/workloads/<name>/...
             if len(parts) >= 3 and parts[0] == "workloadctl" and parts[1] == "workloads":
                 touched.add(parts[2])

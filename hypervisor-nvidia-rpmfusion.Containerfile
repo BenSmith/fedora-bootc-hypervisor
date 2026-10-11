@@ -29,10 +29,15 @@ RUN dnf install -y \
     https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
     https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
 
-# Add NVIDIA official container toolkit repository
+# Add NVIDIA official container toolkit repository. Upstream's file signs
+# the metadata (repo_gpgcheck=1) but sets gpgcheck=0, so the packages would
+# install unverified; they are signed with the key its gpgkey= names, so
+# verify them too, and fail the build if any section is left unchecked.
 RUN curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | \
-    sed '/^sslcacert=/d' | \
-    tee /etc/yum.repos.d/nvidia-container-toolkit.repo
+    sed -e '/^sslcacert=/d' -e 's/^gpgcheck=0$/gpgcheck=1/' | \
+    tee /etc/yum.repos.d/nvidia-container-toolkit.repo && \
+    grep -q '^gpgcheck=1$' /etc/yum.repos.d/nvidia-container-toolkit.repo && \
+    ! grep -q '^gpgcheck=0' /etc/yum.repos.d/nvidia-container-toolkit.repo
 
 # Copied into every image that needs it rather than inherited from the base:
 # the variant `FROM` is a published registry tag, so a variant-only

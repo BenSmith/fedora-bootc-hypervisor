@@ -186,9 +186,14 @@ jobs:
           fi
           SIGN_ARGS=(--sign-by-sigstore-private-key "${CREDS}/cosign-key"
                      --sign-passphrase-file "${CREDS}/cosign-pass")
+          if ! sudo test -s "${CREDS}/registry-auth"; then
+            echo "::error::no registry login at ${CREDS}/registry-auth — run the seal-registry-auth workflow, then re-run this build."
+            exit 1
+          fi
+          AUTH_ARGS=(--authfile "${CREDS}/registry-auth")
 
           sudo podman tag "localhost/hypervisor-bootc:rechunked-${VERSION}" "${IMAGE_BASE}:${VERSIONED}"
-          sudo podman push "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
+          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
           DIGEST=$(cat /tmp/digest.txt)
           # A push can succeed without attaching a signature; the shipped policy.json
           # then refuses the image, so verify the attachment resolves and validates
@@ -201,10 +206,10 @@ jobs:
           fi
           echo "signature verified: ${IMAGE_BASE}@${DIGEST}"
 
-          sudo skopeo copy \
+          sudo skopeo copy "${AUTH_ARGS[@]}" \
             "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${FLOATING}"
           if [ "${VERSION}" = "${STABLE}" ]; then
-            sudo skopeo copy \
+            sudo skopeo copy "${AUTH_ARGS[@]}" \
               "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:latest"
           fi
 
@@ -393,9 +398,14 @@ jobs:
           fi
           SIGN_ARGS=(--sign-by-sigstore-private-key "${CREDS}/cosign-key"
                      --sign-passphrase-file "${CREDS}/cosign-pass")
+          if ! sudo test -s "${CREDS}/registry-auth"; then
+            echo "::error::no registry login at ${CREDS}/registry-auth — run the seal-registry-auth workflow, then re-run this build."
+            exit 1
+          fi
+          AUTH_ARGS=(--authfile "${CREDS}/registry-auth")
 
           sudo podman tag "localhost/${IMAGE}:rechunked-${VERSION}" "${IMAGE_BASE}:${VERSIONED}"
-          sudo podman push "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
+          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
           DIGEST=$(cat /tmp/digest.txt)
           # A push can succeed without attaching a signature; the shipped policy.json
           # then refuses the image, so verify the attachment resolves and validates
@@ -408,7 +418,7 @@ jobs:
           fi
           echo "signature verified: ${IMAGE_BASE}@${DIGEST}"
 
-          sudo skopeo copy \
+          sudo skopeo copy "${AUTH_ARGS[@]}" \
             "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${FLOATING_TAG}"
 
           if [ "${VERSION}" = "${STABLE}" ]; then
@@ -420,7 +430,7 @@ jobs:
             else
               STABLE_FLOATING="latest"
             fi
-            sudo skopeo copy \
+            sudo skopeo copy "${AUTH_ARGS[@]}" \
               "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${STABLE_FLOATING}"
           fi
 

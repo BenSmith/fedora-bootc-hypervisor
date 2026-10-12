@@ -1,0 +1,80 @@
+# Operator-triggered, re-runnable: seal the registry push login from
+# Forgejo's secret store into a host-key-bound systemd credential on the CI
+# runner VM, the way seal-signing-key seals the signing key. Build
+# workflows push with podman/skopeo --authfile pointed at the runner
+# service's credential tmpfs.
+#
+# The registry lets anyone read and only `ci` push, to CI's repositories
+# (workloads/zot-registry/config.json). REGISTRY_CI_PASSWORD is the
+# password whose bcrypt line is in the registry's htpasswd. After a
+# successful run (and the delayed runner restart), verify a push with the
+# next build, then DELETE REGISTRY_CI_PASSWORD from the Forgejo repo
+# secrets. Re-run (re-adding the secret first) when the runner VM is
+# re-provisioned or the password changes. See docs/ci-image-signing.md.
+name: seal-registry-auth
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  seal:
+    runs-on: native
+    env:
+      REGISTRY: registry.local
+    steps:
+      - name: Seal registry login as a systemd credential
+        env:
+          REGISTRY_CI_PASSWORD: ${{ secrets.REGISTRY_CI_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REGISTRY_CI_PASSWORD:-}" ]; then
+            echo "REGISTRY_CI_PASSWORD is not set in Forgejo secrets — nothing to seal."
+            exit 1
+          fi
+          CREDS=/etc/forgejo-runner/creds
+          sudo install -d -m 0700 "${CREDS}"
+          AUTH=$(printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY}" \
+                 "$(printf 'ci:%s' "${REGISTRY_CI_PASSWORD}" | base64 -w0)")
+
+          # The live blob is bound to this VM's host key; keep a copy
+          # before replacing it.
+          if sudo test -e "${CREDS}/registry-auth.cred"; then
+            BACKUP="${CREDS}/backup-$(date -u +%Y%m%dT%H%M%SZ)"
+            sudo install -d -m 0700 "${BACKUP}"
+            sudo cp -a "${CREDS}/registry-auth.cred" "${BACKUP}/"
+            echo "Backed up the sealed registry login to ${BACKUP}"
+          fi
+
+          # Seal to .new and check it decrypts to the same bytes (by digest,
+          # so the password never reaches the job log) before replacing
+          # anything.
+          trap 'sudo rm -f "${CREDS}/registry-auth.cred.new"' EXIT
+          printf '%s' "${AUTH}" | sudo systemd-creds encrypt \
+            --with-key=host --name=registry-auth - "${CREDS}/registry-auth.cred.new"
+          want=$(printf '%s' "${AUTH}" | sha256sum | cut -d' ' -f1)
+          got=$(sudo systemd-creds decrypt --name=registry-auth \
+                "${CREDS}/registry-auth.cred.new" - | sha256sum | cut -d' ' -f1)
+          if [ "${want}" != "${got}" ]; then
+            echo "FATAL: registry-auth does not survive a decrypt round-trip." >&2
+            echo "Live credentials left untouched; nothing was changed." >&2
+            exit 1
+          fi
+          sudo mv "${CREDS}/registry-auth.cred.new" "${CREDS}/registry-auth.cred"
+          trap - EXIT
+
+          sudo install -d /etc/systemd/system/forgejo-runner.service.d
+          {
+            echo "# Decrypt the sealed registry login into the service's"
+            echo "# credential tmpfs at start; build jobs push with"
+            echo "# --authfile /run/credentials/forgejo-runner.service/registry-auth."
+            echo "# Installed by the seal-registry-auth workflow."
+            echo "[Service]"
+            echo "LoadCredentialEncrypted=registry-auth:/etc/forgejo-runner/creds/registry-auth.cred"
+          } | sudo tee /etc/systemd/system/forgejo-runner.service.d/51-registry-auth.conf > /dev/null
+          sudo systemctl daemon-reload
+
+          # Restart after this job reports; an immediate restart would kill
+          # it. Run while the runner is otherwise idle.
+          sudo systemd-run --on-active=30 --collect systemctl restart forgejo-runner.service
+          echo "Sealed. Runner restarts in ~30s. Verify a push on the next" \
+               "build, then delete REGISTRY_CI_PASSWORD from Forgejo."

@@ -93,13 +93,18 @@ jobs:
           fi
           SIGN_ARGS=(--sign-by-sigstore-private-key "${CREDS}/cosign-key"
                      --sign-passphrase-file "${CREDS}/cosign-pass")
+          if ! sudo test -s "${CREDS}/registry-auth"; then
+            echo "::error::no registry login at ${CREDS}/registry-auth — run the seal-registry-auth workflow, then re-run this build."
+            exit 1
+          fi
+          AUTH_ARGS=(--authfile "${CREDS}/registry-auth")
 
           sudo podman tag "localhost/negativo-rpms:build-${VERSION}" "${IMAGE_BASE}:${VERSION}-${DRIVER}"
-          sudo podman push "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSION}-${DRIVER}"
+          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSION}-${DRIVER}"
           DIGEST=$(cat /tmp/digest.txt)
           # The floating tag is copied from the signed digest within the same
           # repository, so that digest's signature covers it.
-          sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${VERSION}"
+          sudo skopeo copy "${AUTH_ARGS[@]}" "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${VERSION}"
           # What the hypervisor builds will resolve: fail here, not there.
           bash .forgejo/scripts/verified-ref.sh "${IMAGE_BASE}:${VERSION}" >/dev/null
           {

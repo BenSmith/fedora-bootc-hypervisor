@@ -4,7 +4,8 @@ Both forges publish signed images, but they get the signing key in different
 ways, and only one of them can use a forge secret at build time. This is the
 reference for the Forgejo path, which is the unusual one.
 
-Cited from `.forgejo/workflows/seal-signing-key.yml`, the five Forgejo
+Cited from `.forgejo/workflows/seal-signing-key.yml`,
+`.forgejo/workflows/seal-registry-auth.yml`, the five Forgejo
 workflows that sign (`build-hypervisor.yml`, `build-hypervisor-f44-quick.yml`,
 `build-minimal-bootc.yml`, `build-workload-images.yml`,
 `publish-negativo-rpms.yml`), and `CLAUDE.md`.
@@ -99,6 +100,23 @@ that made running `cosign` against `registry.local` unreliable.
 **Missing credentials fail the job.** Each signing step checks
 `test -s "${CREDS}/cosign-key"` first and exits non-zero with a message pointing
 at the seal workflow. Nothing unsigned reaches the registry.
+
+## Logging in to push
+
+The registry lets anyone read and only `ci` push, to CI's repositories
+(`workloadctl/workloads/zot-registry/README.md`). The login is sealed the same
+way as the key, by `.forgejo/workflows/seal-registry-auth.yml`: it reads
+`secrets.REGISTRY_CI_PASSWORD`, seals a containers `auth.json` for
+`registry.local` as `/etc/forgejo-runner/creds/registry-auth.cred`, adds a
+`51-registry-auth.conf` drop-in with `LoadCredentialEncrypted=`, and restarts
+the runner after a delay. It keeps the key's safeguards: a backup of the live
+blob, a `.new` file that must decrypt to the same digest, nothing touched on
+failure. Delete `REGISTRY_CI_PASSWORD` from Forgejo once a build has pushed.
+
+Each push step passes `--authfile "${CREDS}/registry-auth"` to `podman push`
+and to every `skopeo copy` that writes a floating or dated tag, and fails
+first, pointing at the workflow, if the credential is missing. A job can read
+the login as it can read the key; neither leaves the runner VM.
 
 ## Floating tags
 

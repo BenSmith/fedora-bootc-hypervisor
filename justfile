@@ -273,7 +273,9 @@ build-nvidia-negativo17-local: build-base-local (_build-nvidia-local "negativo17
 build-all: build-base build-nvidia-rpmfusion build-nvidia-negativo17 build-amd
 build-all-local: build-base-local build-amd-local build-nvidia-rpmfusion-local build-nvidia-negativo17-local
 
-# Tag and push all locally-built images to a registry
+# Tag and push all locally-built images to a registry. registry.local takes
+# pushes only from `ci` (podman login registry.local first) and hosts refuse
+# its hypervisor images unsigned; CI is the normal publisher.
 # Usage: just local_registry=registry.local:5000 push-all
 push-all:
   #!/usr/bin/env bash

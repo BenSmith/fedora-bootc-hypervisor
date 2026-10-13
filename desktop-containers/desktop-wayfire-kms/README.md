@@ -43,6 +43,13 @@ access. Managed by cosy, not the workload system.
    cosy create --kms --audio --sudo --image localhost/desktop-wayfire-kms:latest my-desktop
    ```
 
+## The console
+
+The image's console is kmscon, on every VT logind starts one on (1 to 6).
+seatd hands the compositor the VT that is active when it starts, so a
+desktop started from one of those contends with kmscon for the display.
+Not yet handled by cosy.
+
 ## How it works
 
 See the [desktop-labwc-kms README](../desktop-labwc-kms/README.md) for details

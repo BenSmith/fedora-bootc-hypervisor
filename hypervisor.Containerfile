@@ -458,6 +458,12 @@ COPY systemd/emergency-access.conf /usr/lib/systemd/system/emergency.target.d/em
 COPY systemd/bootc-stage-only.conf \
      /usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-stage-only.conf
 RUN systemctl enable bootc-fetch-apply-updates.timer
+
+# kmscon is the console on every VT logind spawns one on (autovt@ is its
+# alias once enabled), tty1 included; a VT where it cannot start falls back
+# to getty by the unit's own OnFailure=. A cosy --kms desktop started from
+# one of those VTs contends with it for the display.
+RUN systemctl enable kmsconvt@.service
 COPY bin/cosy /usr/bin/
 COPY man/cosy.1 /usr/share/man/man1/cosy.1
 # cosy desktop-container recipes (build contexts an operator runs with `cosy`).

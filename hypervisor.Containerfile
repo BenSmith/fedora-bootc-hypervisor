@@ -452,6 +452,12 @@ RUN /usr/libexec/hypervisor-build/selinux-store-copyup && \
 
 # Bootc-specific: emergency access, cosy
 COPY systemd/emergency-access.conf /usr/lib/systemd/system/emergency.target.d/emergency-access.conf
+
+# Updates are fetched and staged on bootc's own timer, and applied at the
+# next reboot the operator chooses (the drop-in removes --apply).
+COPY systemd/bootc-stage-only.conf \
+     /usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-stage-only.conf
+RUN systemctl enable bootc-fetch-apply-updates.timer
 COPY bin/cosy /usr/bin/
 COPY man/cosy.1 /usr/share/man/man1/cosy.1
 # cosy desktop-container recipes (build contexts an operator runs with `cosy`).

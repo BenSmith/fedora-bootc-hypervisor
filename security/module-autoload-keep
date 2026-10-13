@@ -6,7 +6,9 @@
 
 # workloadctl's egress and inspector rules (nftables/*.nft: dnat, ct,
 # socket cgroupv2), its packet capture (lib/pcap.py: log group) and the
-# workload-proxy dummy link.
+# workload-proxy dummy link. A moathut hut's rules (moatery's
+# moathut/netns.py: a nat chain's dnat, a netdev egress chain) need only
+# nf_tables, nft_nat and nft_chain_nat of these.
 nf_tables
 nft_ct
 nft_nat

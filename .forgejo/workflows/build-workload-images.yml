@@ -21,12 +21,18 @@ on:
         required: true
         default: 'all'
         type: string
+  # Weekly, every bundle: an image is otherwise rebuilt only when its bundle
+  # changes, and the packages in it go stale (audit F26).
+  schedule:
+    - cron: '0 3 * * 0'
   push:
     branches: [main]
     paths:
       - 'workloadctl/workloads/**'
       - '.forgejo/workflows/build-workload-images.yml'
       - '.forgejo/scripts/ci-workload-images.py'
+      - '.forgejo/scripts/ci-scan.py'
+      - '.forgejo/cve-allowlist.txt'
 
 concurrency:
   group: build-workload-images-${{ github.ref }}
@@ -56,7 +62,9 @@ jobs:
         # registry — and it guards the step immediately below. Deliberately not
         # part of `just test`: importing the helper exports WORKLOAD_*_DIR at
         # module scope and would poison workloadctl's shared-process suite.
-        run: python3 .forgejo/scripts/test_ci_workload_images.py
+        run: |
+          python3 .forgejo/scripts/test_ci_workload_images.py
+          python3 .forgejo/scripts/test_ci_scan.py
 
       - name: Compute build matrix
         id: r
@@ -122,6 +130,34 @@ jobs:
           # `workloadctl build ${NAME}` produces, tagged for the registry.
           sudo env REGISTRY="${REGISTRY}" REFS_OUT="${REFS_OUT}" \
             python3 .forgejo/scripts/ci-workload-images.py build "${NAME}"
+
+      - name: Scan for fixable critical vulnerabilities
+        env:
+          NAME: ${{ matrix.workload }}
+          REFS_OUT: /tmp/wl-refs-${{ github.run_id }}-${{ matrix.workload }}.txt
+        run: |
+          # Before the push: an image with a critical that has a fix, or one
+          # that could not be scanned, never reaches the registry. Accepted
+          # ones go in .forgejo/cve-allowlist.txt with a reason.
+          if ! command -v grype >/dev/null; then
+            echo "::error::grype is not installed on the runner; refusing to push an unscanned image"
+            exit 1
+          fi
+          ARCHIVE="/tmp/wl-scan-${{ github.run_id }}-${NAME}.tar"
+          SCAN="/tmp/wl-scan-${{ github.run_id }}-${NAME}.json"
+          trap 'sudo rm -f "$ARCHIVE" "$SCAN"' EXIT
+          while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            sudo rm -f "$ARCHIVE"
+            sudo podman save --format oci-archive -o "$ARCHIVE" "$ref"
+            if ! sudo grype "oci-archive:${ARCHIVE}" -o json --file "$SCAN"; then
+              echo "::error::grype could not scan ${ref}"
+              exit 1
+            fi
+            sudo chmod a+r "$SCAN"
+            python3 .forgejo/scripts/ci-scan.py judge "$ref" "$SCAN" \
+              .forgejo/cve-allowlist.txt
+          done < "$REFS_OUT"
 
       - name: Push and sign
         env:

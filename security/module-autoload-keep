@@ -42,10 +42,10 @@ xt_mark
 tcp_bbr
 sch_fq
 
-# devices.virtualization: /dev/vhost-net and /dev/vhost-vsock.
+# devices.virtualization: /dev/vhost-net. vsock is refused: workloads
+# open no vsock socket, and nothing on the hosts uses one.
 tun
 vhost_net
-vhost_vsock
 
 # The hosts' radios.
 bluetooth

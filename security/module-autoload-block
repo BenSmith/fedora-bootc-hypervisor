@@ -1,0 +1,145 @@
+#!/usr/bin/python3
+"""Write the modprobe.d file that refuses every kernel module a workload
+could make the kernel load, but those module-autoload-keep names.
+
+A container cannot load a module, but the kernel loads one on its behalf
+when a request names something only a module provides: a socket family or
+protocol, a netlink or generic netlink family, a crypto algorithm (AF_ALG,
+TCP-AO), a tty line discipline, and, with NET_ADMIN in its own network
+namespace, a link type, netfilter expression, match or helper, or traffic
+control discipline. The candidates are every module under kernel/net/ and
+every module with an alias in one of those classes. Filesystems, devices,
+key types and executable formats are not candidates: the baseline refuses
+mount, keyctl and namespaces, and the devices a workload opens are granted
+by name.
+
+`install NAME /bin/false` stops an explicit modprobe as well as an autoload.
+The derivation runs on the image's own kernel, so a module a new kernel adds
+to a class is refused without a change here.
+"""
+import argparse
+import re
+import sys
+from pathlib import Path
+
+PATH_PREFIXES = ("kernel/net/",)
+
+ALIAS_PREFIXES = (
+    "net-pf-",          # socket families, protocols, netlink, genl, diag
+    "rtnl-",            # link types, address families, lwtunnels
+    "nfnetlink-",       # nfnetlink subsystems
+    "nft-",             # nftables expressions, chains, objects
+    "nf-logger-",
+    "nfct-helper-",
+    "nf_conntrack-",
+    "ipt_", "ip6t_", "arpt_", "ebt_", "xt_",
+    "ip_set",
+    "ematch-",          # tc ematches
+    "ife-",             # tc ife metadata
+    "xfrm-",
+    "tcp-ulp-",
+    "crypto-",          # AF_ALG binds and TCP-AO keys name an algorithm
+    "tty-ldisc-",
+    "team-", "vport-", "can-", "bt-", "ppp-", "rdma-",
+)
+
+OUT = "/usr/lib/modprobe.d/60-workload-autoload.conf"
+
+
+def module_name(path):
+    name = path.rsplit("/", 1)[-1]
+    return re.sub(r"\.ko(\.\w+)?$", "", name).replace("-", "_")
+
+
+def read_deps(text):
+    """Module name -> (path, [dependency names])."""
+    deps = {}
+    for line in text.splitlines():
+        path, _, rest = line.partition(":")
+        if path:
+            deps[module_name(path)] = (
+                path, [module_name(d) for d in rest.split()])
+    return deps
+
+
+def read_aliases(text):
+    aliases = {}
+    for line in text.splitlines():
+        words = line.split()
+        if len(words) == 3 and words[0] == "alias":
+            aliases.setdefault(words[2].replace("-", "_"), set()).add(
+                words[1])
+    return aliases
+
+
+def read_keep(text):
+    names = []
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            names.append(line.replace("-", "_"))
+    return names
+
+
+def candidates(deps, aliases):
+    return {
+        name for name, (path, _) in deps.items()
+        if path.startswith(PATH_PREFIXES)
+        or any(a.startswith(ALIAS_PREFIXES) for a in aliases.get(name, ()))}
+
+
+def closure(names, deps):
+    """The names and every module they depend on."""
+    kept, todo = set(), list(names)
+    while todo:
+        name = todo.pop()
+        if name not in kept:
+            kept.add(name)
+            todo.extend(deps[name][1])
+    return kept
+
+
+def blocked(deps, aliases, keep):
+    unknown = sorted(set(keep) - deps.keys())
+    if unknown:
+        raise SystemExit(
+            "module-autoload-keep names no module of this kernel: "
+            + " ".join(unknown))
+    return sorted(candidates(deps, aliases) - closure(keep, deps))
+
+
+def render(names, kernel):
+    head = (f"# Written by module-autoload-block for {kernel}: the modules\n"
+            "# a workload could make the kernel load, less\n"
+            "# module-autoload-keep and its dependencies.\n")
+    return head + "".join(f"install {n} /bin/false\n" for n in names)
+
+
+def only_kernel(root):
+    kernels = sorted(p for p in Path(root).iterdir() if p.is_dir())
+    if len(kernels) != 1:
+        raise SystemExit(f"want one kernel under {root}, found "
+                         f"{[k.name for k in kernels]}")
+    return kernels[0]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--kernel", help="/usr/lib/modules/VERSION")
+    parser.add_argument("--keep", required=True)
+    parser.add_argument("--out", default=OUT)
+    args = parser.parse_args(argv)
+    kernel = (Path(args.kernel) if args.kernel
+              else only_kernel("/usr/lib/modules"))
+    deps = read_deps((kernel / "modules.dep").read_text())
+    aliases = read_aliases((kernel / "modules.alias").read_text())
+    names = blocked(deps, aliases, read_keep(Path(args.keep).read_text()))
+    if not names:
+        raise SystemExit("no module to refuse: the tables are not a kernel's")
+    Path(args.out).write_text(render(names, kernel.name))
+    print(f"module-autoload-block: {len(names)} modules refused, "
+          f"written to {args.out}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

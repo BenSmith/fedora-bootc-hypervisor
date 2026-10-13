@@ -463,6 +463,18 @@ RUN chmod 0755 /usr/bin/cosy && \
     /usr/bin/cosy completion bash > /usr/share/bash-completion/completions/cosy && \
     chmod 0644 /usr/share/bash-completion/completions/cosy
 
+# Refuse the kernel modules a workload could make the kernel load: socket
+# families, netlink families, crypto algorithms, line disciplines, netfilter
+# and traffic control. Derived from this image's kernel, less what the hosts
+# and the bundles use (security/module-autoload-keep). The line disciplines
+# also stop autoloading for anyone without CAP_SYS_MODULE.
+COPY security/module-autoload-block security/module-autoload-keep \
+     /usr/libexec/hypervisor-build/
+RUN /usr/libexec/hypervisor-build/module-autoload-block \
+        --keep /usr/libexec/hypervisor-build/module-autoload-keep && \
+    echo 'dev.tty.ldisc_autoload = 0' \
+        > /usr/lib/sysctl.d/50-tty-ldisc-autoload.conf
+
 # Assert the policy store actually holds every module the installed packages
 # ship. A failed semodule inside a %post does not fail the transaction, so
 # without this a build can go green having silently dropped policy — which is

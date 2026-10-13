@@ -1,0 +1,53 @@
+# Kernel modules module-autoload-block leaves loadable, one per line, grouped
+# by what needs them. Everything else in the classes a workload can make the
+# kernel load is refused. Each module's dependencies are kept with it, so a
+# group lists what its user loads, not the whole chain. A name that is not a
+# module of the image's kernel fails the build.
+
+# workloadctl's egress and inspector rules (nftables/*.nft: dnat, ct,
+# socket cgroupv2), its packet capture (lib/pcap.py: log group) and the
+# workload-proxy dummy link.
+nf_tables
+nft_ct
+nft_nat
+nft_chain_nat
+nft_socket
+nft_log
+nfnetlink_log
+dummy
+
+# firewalld's rules: reverse-path fib, reject, masquerade, the netbios-ns
+# helper of its samba-client service.
+nft_fib_inet
+nft_fib_ipv4
+nft_fib_ipv6
+nft_reject_inet
+nft_masq
+nf_conntrack_netbios_ns
+
+# podman's networks for bridge-mode workloads (netavark).
+bridge
+veth
+
+# The WireGuard bundles (wireguard-vpn, dns-vpn, socks5-vpn, pihole-vpn,
+# proxy-stack), which hold NET_ADMIN in their own network namespace: the
+# link, and wg-quick's default-route rules through nft or iptables-nft.
+wireguard
+nft_compat
+xt_addrtype
+xt_connmark
+xt_mark
+
+# The hosts' congestion control and queueing discipline (bbr, fq).
+tcp_bbr
+sch_fq
+
+# devices.virtualization: /dev/vhost-net and /dev/vhost-vsock.
+tun
+vhost_net
+vhost_vsock
+
+# The hosts' radios.
+bluetooth
+bnep
+cfg80211

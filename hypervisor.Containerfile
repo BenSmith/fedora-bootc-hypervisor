@@ -60,8 +60,13 @@ COPY containers.conf.d/10-pasta-no-splice.conf /etc/containers/containers.conf.d
 COPY tmpfiles.d/fail2ban-statedir.conf /usr/lib/tmpfiles.d/fail2ban-statedir.conf
 
 # Virtual-input support for the game-streaming workloads (Sunshine/Wolf). They
-# run their compositor + Sunshine as a rootless container user in the `input`
+# run their compositor + Sunshine as a rootless container user in the `uinput`
 # group and synthesize the client's mouse/keyboard/gamepad through /dev/uinput.
+# The group opens /dev/uinput and the input nodes uinput makes (under
+# /devices/virtual/input), not the host's physical keyboard and mouse, which
+# stay `input`'s: a streaming workload reads none of what is typed at the host.
+# It can still type into whatever holds the host's focus, which uinput does not
+# scope.
 # The module autoload + the group-access rule are shipped in the image (not
 # written to /etc by each workload's enable hook) so they survive bootc
 # upgrades: the ostree /etc 3-way merge was dropping the enable-time
@@ -71,8 +76,11 @@ COPY tmpfiles.d/fail2ban-statedir.conf /usr/lib/tmpfiles.d/fail2ban-statedir.con
 RUN printf 'uinput\n' > /usr/lib/modules-load.d/uinput.conf && \
     printf '# Virtual input devices for rootless game-streaming workloads\n' \
         > /usr/lib/udev/rules.d/72-uinput-input.rules && \
-    printf 'KERNEL=="uinput", GROUP="input", MODE="0660"\n' \
-        >> /usr/lib/udev/rules.d/72-uinput-input.rules
+    printf 'KERNEL=="uinput", GROUP="uinput", MODE="0660"\n' \
+        >> /usr/lib/udev/rules.d/72-uinput-input.rules && \
+    printf 'SUBSYSTEM=="input", DEVPATH=="/devices/virtual/input/*", KERNEL=="event*|js*|mouse*", GROUP="uinput", MODE="0660"\n' \
+        >> /usr/lib/udev/rules.d/72-uinput-input.rules && \
+    printf 'g uinput - -\n' > /usr/lib/sysusers.d/uinput.conf
 
 # CI-injectable trust anchors, and the registry mirror that depends on them.
 #

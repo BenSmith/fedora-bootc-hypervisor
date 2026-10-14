@@ -157,6 +157,11 @@ jobs:
             "localhost/hypervisor-bootc:build-${VERSION}" \
             "localhost/hypervisor-bootc:rechunked-${VERSION}"
 
+      - name: Scan for fixable critical vulnerabilities (report only)
+        env:
+          VERSION: ${{ matrix.fedora_version }}
+        run: bash .forgejo/scripts/ci-os-scan.sh "localhost/hypervisor-bootc:rechunked-${VERSION}"
+
       - name: Tag and push base
         id: push_base
         env:
@@ -370,6 +375,13 @@ jobs:
             /usr/libexec/bootc-base-imagectl rechunk \
             "localhost/${IMAGE}:build-${VERSION}" \
             "localhost/${IMAGE}:rechunked-${VERSION}"
+
+      - name: Scan for fixable critical vulnerabilities (report only)
+        if: steps.gate.outputs.build == 'true'
+        env:
+          IMAGE: ${{ matrix.variant.image }}
+          VERSION: ${{ matrix.fedora_version }}
+        run: bash .forgejo/scripts/ci-os-scan.sh "localhost/${IMAGE}:rechunked-${VERSION}"
 
       - name: Tag and push variant
         if: steps.gate.outputs.build == 'true'

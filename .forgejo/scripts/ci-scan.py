@@ -4,10 +4,14 @@ a fix, unless the allowlist accepts it, and fail on a scan that did not
 happen.
 
     ci-scan.py judge IMAGE SCAN.json ALLOWLIST
+    ci-scan.py report IMAGE SCAN.json ALLOWLIST
 
 A scan that errored, or wrote no `matches`, is a failure, never a pass with
 nothing found: a scanner that cannot read an image reports the same nothing
 as a clean one (audit F26 read failed scans as 0 for weeks).
+
+`report` says the same things as warnings and always exits 0: the OS images
+(ci-os-scan.sh), whose push a scan does not hold.
 
 The allowlist has one accepted vulnerability per line: its id, an image
 pattern (fnmatch, `*` for any), and the reason. `#` starts a comment.
@@ -66,10 +70,11 @@ def summary(scan):
 
 
 def main(argv):
-    if len(argv) != 5 or argv[1] != "judge":
+    if len(argv) != 5 or argv[1] not in ("judge", "report"):
         print(__doc__, file=sys.stderr)
         return 2
-    image, scan_path, allow_path = argv[2:]
+    mode, image, scan_path, allow_path = argv[1:]
+    level, failed = ("error", 1) if mode == "judge" else ("warning", 0)
     try:
         with open(scan_path) as f:
             scan = json.load(f)
@@ -77,13 +82,13 @@ def main(argv):
             allowlist = read_allowlist(f.read())
         found = failures(scan, image, allowlist)
     except (OSError, ValueError) as e:
-        print(f"::error::scan of {image} failed: {e}")
-        return 1
+        print(f"::{level}::scan of {image} failed: {e}")
+        return failed
     print(f"{image}: {summary(scan) or 'nothing found'}")
     for vuln_id, package, version, fixed in found:
-        print(f"::error::{image}: {vuln_id} (critical) in {package} "
+        print(f"::{level}::{image}: {vuln_id} (critical) in {package} "
               f"{version}, fixed in {fixed}")
-    return 1 if found else 0
+    return failed if found else 0
 
 
 if __name__ == "__main__":

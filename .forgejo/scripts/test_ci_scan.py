@@ -3,7 +3,9 @@
 
     python3 .forgejo/scripts/test_ci_scan.py
 """
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import tempfile
@@ -67,14 +69,18 @@ class Judging(unittest.TestCase):
 
 class Main(unittest.TestCase):
 
-    def _run(self, doc, allow=""):
+    def _run(self, doc, allow="", mode="judge"):
         with tempfile.TemporaryDirectory() as tmp:
             s, a = Path(tmp) / "s.json", Path(tmp) / "a.txt"
             if doc is not None:
                 s.write_text(json.dumps(doc) if not isinstance(doc, str)
                              else doc)
             a.write_text(allow)
-            return scan.main(["ci-scan.py", "judge", "img", str(s), str(a)])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = scan.main(["ci-scan.py", mode, "img", str(s), str(a)])
+            self.out = out.getvalue()
+            return rc
 
     def test_clean_passes(self):
         self.assertEqual(self._run({"matches": [match("C", "High")]}), 0)
@@ -85,6 +91,16 @@ class Main(unittest.TestCase):
     def test_no_scan_file_or_garbage_fails(self):
         self.assertEqual(self._run(None), 1)
         self.assertEqual(self._run("not json"), 1)
+
+    def test_report_warns_of_a_finding_and_passes(self):
+        self.assertEqual(self._run({"matches": [match("C")]},
+                                   mode="report"), 0)
+        self.assertIn("::warning::img: C (critical)", self.out)
+        self.assertNotIn("::error::", self.out)
+
+    def test_report_warns_of_a_scan_that_did_not_run(self):
+        self.assertEqual(self._run("not json", mode="report"), 0)
+        self.assertIn("::warning::scan of img failed", self.out)
 
     def test_the_shipped_allowlist_parses(self):
         scan.read_allowlist((HERE.parent / "cve-allowlist.txt").read_text())
@@ -114,6 +130,39 @@ class Workflow(unittest.TestCase):
 
     def test_ci_runs_these_tests(self):
         self.assertIn("python3 .forgejo/scripts/test_ci_scan.py", self.text)
+
+class OsImages(unittest.TestCase):
+    """Each OS image is scanned, report only, after its rechunk and before
+    its push, so a fresh advisory cannot hold the hosts' updates."""
+
+    JOBS = {"build-hypervisor.yml": 2, "build-hypervisor-f44-quick.yml": 2,
+            "build-minimal-bootc.yml": 1}
+
+    def test_every_rechunked_image_is_scanned_before_its_push(self):
+        for name, jobs in self.JOBS.items():
+            text = (HERE.parent / "workflows" / name).read_text()
+            steps = text.split("\n      - name: ")
+            names = [st.split("\n", 1)[0] for st in steps]
+            scans = [i for i, n in enumerate(names)
+                     if n.startswith("Scan for fixable")]
+            self.assertEqual(len(scans), jobs, name)
+            for i in scans:
+                self.assertTrue(names[i - 1].startswith("Rechunk"), name)
+                self.assertTrue(names[i + 1].startswith("Tag and push"), name)
+                ref = steps[i - 1].rsplit(":rechunked-", 1)[1].split('"')[0]
+                self.assertIn(f"ci-os-scan.sh ", steps[i])
+                self.assertIn(f":rechunked-{ref}", steps[i])
+                gate = [ln for ln in steps[i - 1].splitlines()
+                        if ln.strip().startswith("if:")]
+                for ln in gate:
+                    self.assertIn(ln, steps[i], name)
+
+    def test_the_os_scan_never_fails_the_job(self):
+        text = (HERE / "ci-os-scan.sh").read_text()
+        self.assertNotIn("exit 1", text)
+        self.assertIn("ci-scan.py\" report", text)
+        self.assertRegex(text, r"(?m)^exit 0$")
+
 
 if __name__ == "__main__":
     os.chdir(HERE)

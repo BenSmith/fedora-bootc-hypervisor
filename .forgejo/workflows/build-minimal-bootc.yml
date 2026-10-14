@@ -121,6 +121,11 @@ jobs:
             "localhost/${IMAGE_NAME}:build-${VERSION}" \
             "localhost/${IMAGE_NAME}:rechunked-${VERSION}"
 
+      - name: Scan for fixable critical vulnerabilities (report only)
+        env:
+          VERSION: ${{ matrix.fedora_version }}
+        run: bash .forgejo/scripts/ci-os-scan.sh "localhost/${IMAGE_NAME}:rechunked-${VERSION}"
+
       - name: Tag and push
         id: push
         env:

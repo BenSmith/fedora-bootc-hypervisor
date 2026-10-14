@@ -164,6 +164,26 @@ class OsImages(unittest.TestCase):
         self.assertRegex(text, r"(?m)^exit 0$")
 
 
+class Runners(unittest.TestCase):
+    """Each runner bundle installs the scanner the workflows call. The
+    forge's runner had none on 2026-10-14, and the workload image build
+    refuses to push an image it has not scanned."""
+
+    BUNDLES = ("forgejo-runner", "virtual-forgejo")
+
+    def _packages(self, bundle):
+        text = (HERE.parents[1] / "workloadctl" / "workloads" / bundle
+                / "cloud-init" / "user-data").read_text()
+        command = text.split("dnf install -y --skip-broken", 1)[1]
+        command = command.split("\n\n", 1)[0].replace("\\\n", " ")
+        return command.split()
+
+    def test_every_runner_installs_grype(self):
+        for bundle in self.BUNDLES:
+            with self.subTest(bundle=bundle):
+                self.assertIn("grype", self._packages(bundle))
+
+
 if __name__ == "__main__":
     os.chdir(HERE)
     unittest.main()

@@ -4,8 +4,8 @@ could make the kernel load, but those module-autoload-keep names.
 
 A container cannot load a module, but the kernel loads one on its behalf
 when a request names something only a module provides: a socket family or
-protocol, a netlink or generic netlink family, a crypto algorithm (AF_ALG,
-TCP-AO), a tty line discipline, and, with NET_ADMIN in its own network
+protocol, a netlink or generic netlink family, a crypto algorithm (an
+AF_ALG bind), a tty line discipline, and, with NET_ADMIN in its own network
 namespace, a link type, netfilter expression, match or helper, or traffic
 control discipline. The candidates are every module under kernel/net/ and
 every module with an alias in one of those classes. Filesystems, devices,
@@ -38,7 +38,7 @@ ALIAS_PREFIXES = (
     "ife-",             # tc ife metadata
     "xfrm-",
     "tcp-ulp-",
-    "crypto-",          # AF_ALG binds and TCP-AO keys name an algorithm
+    "crypto-",          # an AF_ALG bind names an algorithm
     "tty-ldisc-",
     "team-", "vport-", "can-", "bt-", "ppp-", "rdma-",
 )

@@ -259,7 +259,7 @@ Weekly automated builds via GitHub Actions: `fedora-bootc-minimal` on Saturdays,
 - [Secrets management](workloadctl/docs/secrets.md) — TPM2-encrypted credentials
 - [Schema reference](workloadctl/docs/schema-reference.toml) — Annotated TOML schema
 - [Example configs](workloadctl/workloads/) — Real-world workload definitions, one bundle per directory
-- [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues and fixes
+- [Troubleshooting](workloadctl/docs/troubleshooting.md) — Common issues and fixes
 - [Emergency recovery](docs/emergency-recovery.md) — Boot recovery procedures
 
 ## License

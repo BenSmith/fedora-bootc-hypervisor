@@ -127,7 +127,6 @@ desktop-containers/                       Four cosy build contexts (labwc/wayfir
 
 docs/
   emergency-recovery.md                   Boot recovery procedures
-  TROUBLESHOOTING.md                      Common issues and fixes
   ci-image-signing.md                     How each forge gets the signing key; the Forgejo sealed-credential scheme
   cosign-local-redirect-loop.md           Why CI signs via containers/image instead of the cosign CLI
   ideas.md                                Scratch list, not a plan of record
@@ -214,7 +213,7 @@ sudo bootc switch ghcr.io/bensmith/hypervisor-amd:44
 - [workloadctl/docs/workloads.md](workloadctl/docs/workloads.md) — Full configuration guide
 - [workloadctl/docs/cli.md](workloadctl/docs/cli.md) — CLI reference
 - [workloadctl/docs/secrets.md](workloadctl/docs/secrets.md) — Secrets management
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Common issues and fixes
+- [workloadctl/docs/troubleshooting.md](workloadctl/docs/troubleshooting.md) — Common workload issues and fixes
 - [docs/emergency-recovery.md](docs/emergency-recovery.md) — Boot recovery
 
 ## License

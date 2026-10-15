@@ -53,3 +53,7 @@ vhost_net
 bluetooth
 bnep
 cfg80211
+
+# The image booted as a VM (the runtime rung's gate): its virtio NIC, whose
+# driver needs net/core's failover.
+virtio_net

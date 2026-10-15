@@ -31,4 +31,4 @@ and TLS verification against this CA is the only thing that distinguishes the
 real cache from an impostor. An image with no homelab CA has nothing to verify
 against and no reason to want the mirror, so it does not get one. Dropping a
 `.crt` here turns both on together; that pairing is what
-`workloadctl/tests/test_registry_mirror.py` enforces.
+`tests/test_registry_mirror.py` enforces.

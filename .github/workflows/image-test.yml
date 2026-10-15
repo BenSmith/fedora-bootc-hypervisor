@@ -1,0 +1,35 @@
+# The image's own checks (tests/): what the Containerfiles, build scripts and
+# workflows hold that a green build would not show. Files only, no podman.
+#
+# The `github.server_url == 'https://github.com'` guard keeps the mirrored
+# Forgejo runner from also executing this job; Forgejo has its own
+# .forgejo/workflows/image-test.yml.
+name: image test
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: image-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: ${{ github.server_url == 'https://github.com' }}
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    timeout-minutes: 10
+    steps:
+      - name: Tooling
+        run: dnf install -y git just python3
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Image tests
+        run: just test-image

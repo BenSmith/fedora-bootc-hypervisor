@@ -1,0 +1,23 @@
+name: image test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: native
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure tooling
+        run: |
+          for bin in just python3; do
+            command -v "$bin" >/dev/null || sudo dnf install -y "$bin"
+          done
+
+      - name: Image tests
+        run: just test-image

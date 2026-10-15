@@ -576,8 +576,13 @@ aio-local vmname="hypervisor-test" memory="4096" vcpus="2" rootfs="xfs" size="20
 
 # === Tests ==================================================================
 
-test:
+# the image's own checks, then workloadctl's suite
+test: test-image
   cd workloadctl && just test
+
+# what the Containerfiles, build scripts and workflows hold (tests/)
+test-image:
+  python3 -B -m unittest discover -t . -s tests -p 'test_*.py'
 
 test-unit:
   cd workloadctl && just test-unit

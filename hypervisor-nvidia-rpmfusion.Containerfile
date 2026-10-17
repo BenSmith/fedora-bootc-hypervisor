@@ -46,9 +46,18 @@ RUN curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-co
 COPY security/selinux-store-copyup /usr/libexec/hypervisor-build/selinux-store-copyup
 COPY security/selinux-store-verify /usr/libexec/hypervisor-build/selinux-store-verify
 
-# Install NVIDIA drivers and tools, headless
-RUN /usr/libexec/hypervisor-build/selinux-store-copyup && \
+# Install NVIDIA drivers and tools, headless, with the kmod built above in the
+# same transaction. xorg-x11-drv-nvidia requires nvidia-kmod; the prebuilt kmod
+# is the only thing that may satisfy it here. Left out of the transaction, dnf
+# picks akmod-nvidia, whose unversioned kernel-devel upgrades the kernel past
+# the one the kmod was built for (and ships a compiler and akmods.service). The
+# kmod's own kernel-uname-r requirement pins the kernel; the excludes make any
+# other provider a resolution error rather than a silent pull.
+RUN --mount=type=bind,from=kmod-builder,source=/var/cache/akmods,target=/tmp/akmods \
+    /usr/libexec/hypervisor-build/selinux-store-copyup && \
     dnf install --setopt=install_weak_deps=False -y \
+    --exclude=akmod-nvidia,kernel-devel \
+    $(find /tmp/akmods -name 'kmod-nvidia-*.rpm') \
     nvidia-container-toolkit \
     nvidia-gpu-firmware \
     nvidia-modprobe \
@@ -59,11 +68,6 @@ RUN /usr/libexec/hypervisor-build/selinux-store-copyup && \
     xorg-x11-drv-nvidia-libs && \
     dnf clean all && \
     rm -rf /var/log/* /var/cache/* /var/lib/dnf/* /boot/*
-
-# Install pre-built kmod RPM from builder stage
-COPY --from=kmod-builder /var/cache/akmods/ /tmp/akmods/
-RUN find /tmp/akmods -name '*.rpm' -exec rpm -ivh {} + && \
-    rm -rf /tmp/akmods
 
 # Blacklist nouveau and configure proprietary driver for KMS/Wayland
 RUN echo -e "blacklist nouveau\noptions nouveau modeset=0" \

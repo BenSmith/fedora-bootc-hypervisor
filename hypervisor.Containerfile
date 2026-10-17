@@ -60,7 +60,13 @@ COPY containers.conf.d/10-pasta-no-splice.conf /etc/containers/containers.conf.d
 COPY tmpfiles.d/fail2ban-statedir.conf /usr/lib/tmpfiles.d/fail2ban-statedir.conf
 # ssh: passwords from the LAN only, and fail2ban's sshd jail. 20- sorts
 # before 40-workloadctl.conf and 50-redhat.conf: sshd keeps the first value.
+# SSHD_PASSWORD_ADDRESSES: the addresses and CIDR ranges that may log in with
+# a password, comma-separated; empty for keys only, from everywhere.
+ARG SSHD_PASSWORD_ADDRESSES=192.168.0.0/24,fe80::/10
 COPY security/sshd-lan-passwords.conf /etc/ssh/sshd_config.d/20-lan-passwords.conf
+COPY security/sshd-password-addresses /usr/libexec/hypervisor-build/sshd-password-addresses
+RUN /usr/libexec/hypervisor-build/sshd-password-addresses \
+        "$SSHD_PASSWORD_ADDRESSES" /etc/ssh/sshd_config.d/20-lan-passwords.conf
 COPY security/fail2ban-sshd.local /etc/fail2ban/jail.d/sshd.local
 
 # Virtual-input support for the game-streaming workloads (Sunshine/Wolf). They

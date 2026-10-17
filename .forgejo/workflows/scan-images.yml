@@ -48,25 +48,28 @@ jobs:
           else
             REFS=$(python3 .forgejo/scripts/ci-workload-images.py images)
           fi
-          # skopeo straight to an archive: nothing lands in root's image
-          # store, and one archive at a time bounds the disk.
+          # skopeo straight to an OCI layout directory: nothing lands in
+          # root's image store, and one image at a time bounds the disk. Not
+          # an archive: grype unpacks an oci-archive with a 2 GiB cap on each
+          # entry, which a CUDA layer exceeds.
           AUTH=/run/credentials/forgejo-runner.service/registry-auth
-          ARCHIVE=/var/tmp/img-scan-${{ github.run_id }}.tar
+          LAYOUT=/var/tmp/img-scan-${{ github.run_id }}
           SCAN=/var/tmp/img-scan-${{ github.run_id }}.json
-          trap 'sudo rm -f "$ARCHIVE" "$SCAN"' EXIT
+          trap 'sudo rm -rf "$LAYOUT" "$SCAN"' EXIT
           while IFS= read -r ref; do
             [ -n "$ref" ] || continue
             auth=()
             if [ "${ref%%/*}" = registry.local ] && sudo test -s "$AUTH"; then
               auth=(--authfile "$AUTH")
             fi
-            sudo rm -f "$ARCHIVE" "$SCAN"
-            if ! sudo skopeo copy -q "${auth[@]}" "docker://${ref}" \
-                "oci-archive:${ARCHIVE}"; then
+            sudo rm -rf "$LAYOUT" "$SCAN"
+            # A layout cannot hold signatures; the scan does not need them.
+            if ! sudo skopeo copy -q --remove-signatures "${auth[@]}" \
+                "docker://${ref}" "oci:${LAYOUT}:latest"; then
               echo "::warning::could not fetch ${ref}; it was not scanned"
               continue
             fi
-            if ! sudo grype "oci-archive:${ARCHIVE}" -o json \
+            if ! sudo grype "oci-dir:${LAYOUT}" -o json \
                 --file "$SCAN"; then
               echo "::warning::grype could not scan ${ref}"
               continue

@@ -143,14 +143,17 @@ jobs:
             echo "::error::grype is not installed on the runner; refusing to push an unscanned image"
             exit 1
           fi
-          ARCHIVE="/tmp/wl-scan-${{ github.run_id }}-${NAME}.tar"
+          # An OCI layout directory, not an archive: grype unpacks an
+          # oci-archive with a 2 GiB cap on each entry, which a CUDA layer
+          # exceeds.
+          LAYOUT="/tmp/wl-scan-${{ github.run_id }}-${NAME}"
           SCAN="/tmp/wl-scan-${{ github.run_id }}-${NAME}.json"
-          trap 'sudo rm -f "$ARCHIVE" "$SCAN"' EXIT
+          trap 'sudo rm -rf "$LAYOUT" "$SCAN"' EXIT
           while IFS= read -r ref; do
             [ -n "$ref" ] || continue
-            sudo rm -f "$ARCHIVE"
-            sudo podman save --format oci-archive -o "$ARCHIVE" "$ref"
-            if ! sudo grype "oci-archive:${ARCHIVE}" -o json --file "$SCAN"; then
+            sudo rm -rf "$LAYOUT"
+            sudo podman save --format oci-dir -o "$LAYOUT" "$ref"
+            if ! sudo grype "oci-dir:${LAYOUT}" -o json --file "$SCAN"; then
               echo "::error::grype could not scan ${ref}"
               exit 1
             fi

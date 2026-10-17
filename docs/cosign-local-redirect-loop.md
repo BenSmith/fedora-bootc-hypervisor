@@ -5,9 +5,7 @@ redirecting it, and why CI signs with `containers/image` rather than the `cosign
 binary.
 
 Cited from `workloadctl/workloads/caddy/Caddyfile`,
-`workloadctl/workloads/caddy/README.md`,
-`workloadctl/workloads/virtual-forgejo/cloud-init/user-data`, and the Forgejo
-build workflows.
+`workloadctl/workloads/caddy/README.md`, and the Forgejo build workflows.
 
 ## Symptom
 

@@ -80,7 +80,7 @@ publishes that metric, so this is purely an alert-rule addition, no code.
 ### Unified TLS: hybrid internal CA + Let's Encrypt
 **Why:** Today every Caddy uses `local_certs`, minting its own internal
 CA on first boot. The fetch-the-root-over-plain-HTTP dance is already
-copy-pasted across several setup scripts (virtual-forgejo, wayfire,
+copy-pasted across several setup scripts (wayfire,
 sunshine). Two distinct problems hide in here, and they don't want the
 same fix:
 
@@ -157,7 +157,7 @@ rather than blocking:**
    (`guest-set-time` on a mint cache miss).
 2. **Guest — per bundle.** The built-in cloud-init seed does *not* install
    `qemu-guest-agent`; a bundle that wants it installs and enables it in its own
-   `user_data_file` (`workloads/virtual-forgejo/cloud-init/user-data` does). So
+   `user_data_file` (`workloads/forgejo-runner/cloud-init/user-data` does). So
    the agent is available where a workload asks for it, and absent otherwise —
    which the `app` branch has to degrade on, exactly as noted below.
 

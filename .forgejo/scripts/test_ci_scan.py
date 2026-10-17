@@ -169,7 +169,7 @@ class Runners(unittest.TestCase):
     forge's runner had none on 2026-10-14, and the workload image build
     refuses to push an image it has not scanned."""
 
-    BUNDLES = ("forgejo-runner", "virtual-forgejo")
+    BUNDLES = ("forgejo-runner",)
 
     def _packages(self, bundle):
         text = (HERE.parents[1] / "workloadctl" / "workloads" / bundle

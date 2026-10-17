@@ -125,7 +125,8 @@ class Workflow(unittest.TestCase):
 
     def test_a_missing_scanner_or_a_failed_scan_stops_the_job(self):
         self.assertIn("command -v grype", self.text)
-        self.assertRegex(self.text, r"if ! sudo grype [^\n]*; then\n"
+        self.assertRegex(self.text, r"if ! sudo (?:env [^\n]*?)?grype "
+                                    r"(?:[^\n]*\\\n)*[^\n]*; then\n"
                                     r"[^\n]*\n\s*exit 1")
 
     def test_ci_runs_these_tests(self):

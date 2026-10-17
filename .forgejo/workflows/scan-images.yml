@@ -1,0 +1,77 @@
+name: Scan Images
+
+# Report-only grype scan of every image the bundles run: the self-built ones
+# as the registry holds them, and the upstream ones a bundle names directly,
+# which no build scans. A CVE published after an image's build scan shows
+# here, not at the next weekly rebuild. Warnings, never a failure: nothing
+# waits on this run (build-workload-images.yml's scan is the gate).
+
+on:
+  workflow_dispatch:
+    inputs:
+      images:
+        description: 'Images to scan: "all", or a space/comma list of refs'
+        required: true
+        default: 'all'
+        type: string
+  # Daily, after the weekend image builds (03:00) have pushed.
+  schedule:
+    - cron: '0 5 * * *'
+
+concurrency:
+  group: scan-images
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: native
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test the CI helpers
+        run: |
+          python3 .forgejo/scripts/test_ci_workload_images.py
+          python3 .forgejo/scripts/test_ci_scan.py
+
+      - name: Scan
+        env:
+          SELECT: ${{ inputs.images }}
+        run: |
+          if ! command -v grype >/dev/null; then
+            echo "::warning::grype is not on the runner; nothing was scanned"
+            exit 0
+          fi
+          if [ -n "$SELECT" ] && [ "$SELECT" != "all" ]; then
+            REFS=$(echo "$SELECT" | tr ', ' '\n\n')
+          else
+            REFS=$(python3 .forgejo/scripts/ci-workload-images.py images)
+          fi
+          # skopeo straight to an archive: nothing lands in root's image
+          # store, and one archive at a time bounds the disk.
+          AUTH=/run/credentials/forgejo-runner.service/registry-auth
+          ARCHIVE=/var/tmp/img-scan-${{ github.run_id }}.tar
+          SCAN=/var/tmp/img-scan-${{ github.run_id }}.json
+          trap 'sudo rm -f "$ARCHIVE" "$SCAN"' EXIT
+          while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            auth=()
+            if [ "${ref%%/*}" = registry.local ] && sudo test -s "$AUTH"; then
+              auth=(--authfile "$AUTH")
+            fi
+            sudo rm -f "$ARCHIVE" "$SCAN"
+            if ! sudo skopeo copy -q "${auth[@]}" "docker://${ref}" \
+                "oci-archive:${ARCHIVE}"; then
+              echo "::warning::could not fetch ${ref}; it was not scanned"
+              continue
+            fi
+            if ! sudo grype "oci-archive:${ARCHIVE}" -o json \
+                --file "$SCAN"; then
+              echo "::warning::grype could not scan ${ref}"
+              continue
+            fi
+            sudo chmod a+r "$SCAN"
+            python3 .forgejo/scripts/ci-scan.py report "$ref" "$SCAN" \
+              .forgejo/cve-allowlist.txt
+          done <<< "$REFS"

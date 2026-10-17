@@ -220,6 +220,42 @@ class TagTests(unittest.TestCase):
             )
 
 
+class ImagesTests(unittest.TestCase):
+    """What scan-images.yml fetches: an upstream image as the bundle names
+    it, a self-built one where the build pushed it, every variant too."""
+
+    def _cfg(self, specs, built, variants=None):
+        cfg = _Cfg(variants=variants)
+        cfg.container_specs = lambda: [(n, i, "missing") for n, i in specs]
+        cfg.build_images = lambda: list(built)
+        return cfg
+
+    def test_an_upstream_image_is_scanned_as_named(self):
+        cfg = self._cfg([("app", "docker.io/pihole/pihole:latest")], [])
+        self.assertEqual(ci._images(cfg), ["docker.io/pihole/pihole:latest"])
+
+    def test_a_self_built_image_is_scanned_from_the_registry(self):
+        cfg = self._cfg([("zot", "localhost/zot:latest")],
+                        ["localhost/zot:latest"])
+        self.assertEqual(ci._images(cfg),
+                         ["registry.local/workloads/zot:latest"])
+
+    def test_each_variant_is_scanned(self):
+        image = "registry.local/workloads/llama-swap:latest"
+        cfg = self._cfg([("llama-swap", image)], [image],
+                        variants=[{"suffix": "cuda", "args": {"X": "1"}}])
+        self.assertEqual(ci._images(cfg), [
+            image, "registry.local/workloads/llama-swap:cuda"])
+
+    def test_a_pod_lists_every_container(self):
+        cfg = self._cfg([("vpn", "localhost/vpn:latest"),
+                         ("pihole", "docker.io/pihole/pihole:latest")],
+                        ["localhost/vpn:latest"])
+        self.assertEqual(ci._images(cfg), [
+            "registry.local/workloads/vpn:latest",
+            "docker.io/pihole/pihole:latest"])
+
+
 class CmdBuildOrderingTests(unittest.TestCase):
     """Build order is load-bearing, so it gets a test rather than just a comment.
 

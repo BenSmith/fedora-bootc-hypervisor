@@ -21,6 +21,10 @@ Subcommands:
   build <name>            build the workload's pull=never image(s), tag each for
                           the registry, and append the registry refs to the file
                           named by REFS_OUT (one per line) for the push step.
+  images                  print every image the bundles run, one per line:
+                          an upstream image as named, a self-built one (and
+                          each variant) as the registry holds it. For the
+                          scan of images no build scans (scan-images.yml).
 
 Variants (`[[build.variants]]`) let one bundle publish more than one image from
 the same context — e.g. a vulkan default plus a cuda build. This is a
@@ -216,6 +220,36 @@ def cmd_list() -> int:
     return 0
 
 
+def _images(cfg) -> list[str]:
+    """The images one workload runs, as scan-images.yml fetches them."""
+    built = set(cfg.build_images())
+    refs = []
+    for _name, image, _pull in cfg.container_specs():
+        if image not in built:
+            refs.append(image)
+            continue
+        ref = _registry_ref(image)
+        refs.append(ref)
+        refs.extend(_variant_ref(ref, v["suffix"]) for v in _variants(cfg))
+    return refs
+
+
+def cmd_images() -> int:
+    refs: list[str] = []
+    for path in sorted(WORKLOADS_TREE.glob("*/workload.toml")):
+        cfg = _load(path.parent.name)
+        if cfg is None:
+            print(f"::warning::cannot load workload '{path.parent.name}'; "
+                  "its images are not scanned", file=sys.stderr)
+            continue
+        if cfg.is_vm:
+            continue
+        refs.extend(r for r in _images(cfg) if r not in refs)
+    for ref in refs:
+        print(ref)
+    return 0
+
+
 def cmd_build(name: str) -> int:
     cfg = _load(name)
     if cfg is None:
@@ -281,6 +315,8 @@ def main(argv: list[str]) -> int:
         return 2
     if argv[1] == "list":
         return cmd_list()
+    if argv[1] == "images":
+        return cmd_images()
     if argv[1] == "build":
         if len(argv) < 3:
             print("usage: ci-workload-images.py build <name>", file=sys.stderr)

@@ -51,26 +51,29 @@ jobs:
           # skopeo straight to an OCI layout directory: nothing lands in
           # root's image store, and one image at a time bounds the disk. Not
           # an archive: grype unpacks an oci-archive with a 2 GiB cap on each
-          # entry, which a CUDA layer exceeds.
+          # entry, which a CUDA layer exceeds. grype's layer cache goes on the
+          # disk too: a CUDA image overfills the runner's /tmp.
           AUTH=/run/credentials/forgejo-runner.service/registry-auth
           LAYOUT=/var/tmp/img-scan-${{ github.run_id }}
           SCAN=/var/tmp/img-scan-${{ github.run_id }}.json
-          trap 'sudo rm -rf "$LAYOUT" "$SCAN"' EXIT
+          GRYPE_TMP=/var/tmp/img-scan-${{ github.run_id }}.tmp
+          trap 'sudo rm -rf "$LAYOUT" "$SCAN" "$GRYPE_TMP"' EXIT
           while IFS= read -r ref; do
             [ -n "$ref" ] || continue
             auth=()
             if [ "${ref%%/*}" = registry.local ] && sudo test -s "$AUTH"; then
               auth=(--authfile "$AUTH")
             fi
-            sudo rm -rf "$LAYOUT" "$SCAN"
+            sudo rm -rf "$LAYOUT" "$SCAN" "$GRYPE_TMP"
+            sudo mkdir "$GRYPE_TMP"
             # A layout cannot hold signatures; the scan does not need them.
             if ! sudo skopeo copy -q --remove-signatures "${auth[@]}" \
                 "docker://${ref}" "oci:${LAYOUT}:latest"; then
               echo "::warning::could not fetch ${ref}; it was not scanned"
               continue
             fi
-            if ! sudo grype "oci-dir:${LAYOUT}" -o json \
-                --file "$SCAN"; then
+            if ! sudo env TMPDIR="$GRYPE_TMP" grype "oci-dir:${LAYOUT}" \
+                -o json --file "$SCAN"; then
               echo "::warning::grype could not scan ${ref}"
               continue
             fi

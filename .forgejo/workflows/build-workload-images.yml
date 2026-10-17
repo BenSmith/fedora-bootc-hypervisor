@@ -145,15 +145,19 @@ jobs:
           fi
           # An OCI layout directory, not an archive: grype unpacks an
           # oci-archive with a 2 GiB cap on each entry, which a CUDA layer
-          # exceeds.
-          LAYOUT="/tmp/wl-scan-${{ github.run_id }}-${NAME}"
-          SCAN="/tmp/wl-scan-${{ github.run_id }}-${NAME}.json"
-          trap 'sudo rm -rf "$LAYOUT" "$SCAN"' EXIT
+          # exceeds. The layout and grype's layer cache go on the disk, not
+          # in /tmp: a CUDA image overfills the runner's /tmp.
+          LAYOUT="/var/tmp/wl-scan-${{ github.run_id }}-${NAME}"
+          SCAN="/var/tmp/wl-scan-${{ github.run_id }}-${NAME}.json"
+          GRYPE_TMP="/var/tmp/wl-scan-${{ github.run_id }}-${NAME}.tmp"
+          trap 'sudo rm -rf "$LAYOUT" "$SCAN" "$GRYPE_TMP"' EXIT
           while IFS= read -r ref; do
             [ -n "$ref" ] || continue
-            sudo rm -rf "$LAYOUT"
+            sudo rm -rf "$LAYOUT" "$GRYPE_TMP"
+            sudo mkdir "$GRYPE_TMP"
             sudo podman save --format oci-dir -o "$LAYOUT" "$ref"
-            if ! sudo grype "oci-dir:${LAYOUT}" -o json --file "$SCAN"; then
+            if ! sudo env TMPDIR="$GRYPE_TMP" grype "oci-dir:${LAYOUT}" \
+                -o json --file "$SCAN"; then
               echo "::error::grype could not scan ${ref}"
               exit 1
             fi

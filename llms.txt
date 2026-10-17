@@ -102,6 +102,10 @@ security/
   pasta_sandbox.cil                       SELinux module (CIL): pasta_t sandbox-setup perms missing from
                                           container-selinux on F44; remove once fixed upstream
   pwquality-no-dictionary.conf            Disable dictionary check for password quality
+  sshd-lan-passwords.conf                 sshd: passwords from 192.168.0.0/24 and link-local only, keys
+                                          from anywhere (/etc/ssh/sshd_config.d/20-lan-passwords.conf)
+  fail2ban-sshd.local                     fail2ban's sshd jail: 5 failures in 10m ban the address 1h,
+                                          from the journal, through firewalld
 
 systemd/
   emergency-access.conf                   Emergency shell drop-in

@@ -1,0 +1,10 @@
+# Five failed ssh logins in ten minutes from one address block it for an
+# hour. fail2ban runs in the image with no jail of its own; the ban goes
+# through firewalld (fail2ban-firewalld's 00-firewalld.conf), and sshd logs
+# to the journal, not to a file.
+[sshd]
+enabled = true
+backend = systemd
+maxretry = 5
+findtime = 10m
+bantime = 1h

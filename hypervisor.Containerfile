@@ -58,6 +58,10 @@ COPY containers.conf.d/10-pasta-no-splice.conf /etc/containers/containers.conf.d
 # fail2ban's /var/lib/fail2ban state dir is emptied with the rest of /var during
 # the build; recreate it at boot so fail2ban-server can open its sqlite db.
 COPY tmpfiles.d/fail2ban-statedir.conf /usr/lib/tmpfiles.d/fail2ban-statedir.conf
+# ssh: passwords from the LAN only, and fail2ban's sshd jail. 20- sorts
+# before 40-workloadctl.conf and 50-redhat.conf: sshd keeps the first value.
+COPY security/sshd-lan-passwords.conf /etc/ssh/sshd_config.d/20-lan-passwords.conf
+COPY security/fail2ban-sshd.local /etc/fail2ban/jail.d/sshd.local
 
 # Virtual-input support for the game-streaming workloads (Sunshine/Wolf). They
 # run their compositor + Sunshine as a rootless container user in the `uinput`

@@ -4,8 +4,8 @@ Why the Caddy reverse proxy hard-404s the registry API on plain HTTP instead of
 redirecting it, and why CI signs with `containers/image` rather than the `cosign`
 binary.
 
-Cited from `workloadctl/workloads/caddy/Caddyfile`,
-`workloadctl/workloads/caddy/README.md`, and the Forgejo build workflows.
+Cited from workloadctl's caddy bundle (its `Caddyfile` and `README.md`, in
+the workloadctl repository) and the Forgejo build workflows.
 
 ## Symptom
 
@@ -71,5 +71,6 @@ See [ci-image-signing.md](ci-image-signing.md) for the rest of that scheme.
 
 Removing the `/v2*` handler restores the bug, and it will present as intermittent
 signing failures under load rather than as anything pointing back at the proxy.
-`workloadctl/workloads/caddy/README.md` documents the two supported ways to change
+The caddy bundle's README (https://github.com/BenSmith/workloadctl/blob/main/workloads/caddy/README.md)
+documents the two supported ways to change
 the HTTP behaviour without losing the exemption.

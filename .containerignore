@@ -5,10 +5,8 @@
 # This is not a size optimisation with a correctness side effect — it is the
 # other way round. `.gitignore` does not exclude anything from a podman build
 # context, so every local build artifact under this tree got tarred up and
-# handed to the builder. workloadctl/rpmbuild/ is the one that bites: the
-# rpm-builder stage COPYs workloadctl/ wholesale, so a host that has ever run
-# `just rpm-build` shipped its whole RPM history into the stage, and the
-# `workloadctl-*.rpm` glob downstream then matched every one of them.
+# handed to the builder, and a stage that COPYs a directory wholesale takes
+# whatever has accumulated in it.
 #
 # Anything COPYed by a Containerfile must stay out of this list even when it is
 # gitignored — bin/cosy, man/cosy.1 and the generated policy.json all are.
@@ -20,7 +18,6 @@
 .reference
 
 # Local build output.
-workloadctl/rpmbuild
 rpm/rpm-output
 output
 base-images

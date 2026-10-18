@@ -30,6 +30,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: workloadctl at the image's pin
+        # Its modules and the bundles it ships, from the RPMs
+        # hypervisor.Containerfile pins, unpacked and not installed.
+        run: |
+          .forgejo/scripts/workloadctl-root "$RUNNER_TEMP/workloadctl-root"
+          echo "WORKLOADCTL_ROOT=$RUNNER_TEMP/workloadctl-root" >> "$GITHUB_ENV"
+
       - name: Test the CI helpers
         run: |
           python3 .forgejo/scripts/test_ci_workload_images.py

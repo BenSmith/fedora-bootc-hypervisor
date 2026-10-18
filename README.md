@@ -100,7 +100,7 @@ hypervisor-amd:latest                  # Stable Fedora version (AMD)
 
 ## Workload System (workloadctl)
 
-[`workloadctl`](workloadctl/) is a standalone tool (RPM-packaged, **no bootc dependency**) that turns declarative TOML
+[`workloadctl`](https://github.com/BenSmith/workloadctl) is a standalone tool (RPM-packaged, **no bootc dependency**) that turns declarative TOML
 configs into isolated workloads — either rootless podman containers (the common case) or KVM/QEMU VMs (declared with a
 `[vm]` section). It should work on systemd Linuxes with Podman 5.3+.
 
@@ -144,7 +144,8 @@ image = "docker.io/nginxinc/nginx-unprivileged:alpine"
 ports = ["8080:8080"]
 ```
 
-See the [workloadctl README](workloadctl/README.md) for install instructions and the full feature set.
+See the [workloadctl README](https://github.com/BenSmith/workloadctl/blob/main/README.md) for install instructions and the full feature set. It is developed
+in [its own repository](https://github.com/BenSmith/workloadctl); the image installs the release `hypervisor.Containerfile` pins.
 
 ## Installation and Updates
 
@@ -232,10 +233,11 @@ just build-all-isos                      # All variant ISOs
 # Development: build, create qcow2, deploy to libvirt VM
 just aio-local
 
-# Tests
-just test                                # workloadctl unit tests
-cd workloadctl && just test-runtime      # Runtime rung: boot a VM and run the runtime checks
-                                         #   (WLRT_MODE=gate → real bootc image + swtpm; skips without /dev/kvm)
+# Tests: what the Containerfiles, build scripts and workflows hold
+just test
+
+# A local workloadctl in place of the pinned release (a checkout or an RPM)
+WORKLOADCTL_LOCAL=../workloadctl just build-base-local
 
 # Push to local registry
 just push-all
@@ -253,13 +255,13 @@ Weekly automated builds via GitHub Actions: `fedora-bootc-minimal` on Saturdays,
 
 ## Documentation
 
-- [workloadctl README](workloadctl/README.md) — Workload system overview
-- [Workload guide](workloadctl/docs/workloads.md) — Full configuration reference
-- [CLI reference](workloadctl/docs/cli.md) — All commands and options
-- [Secrets management](workloadctl/docs/secrets.md) — TPM2-encrypted credentials
-- [Schema reference](workloadctl/docs/schema-reference.toml) — Annotated TOML schema
-- [Example configs](workloadctl/workloads/) — Real-world workload definitions, one bundle per directory
-- [Troubleshooting](workloadctl/docs/troubleshooting.md) — Common issues and fixes
+- [workloadctl README](https://github.com/BenSmith/workloadctl/blob/main/README.md) — Workload system overview
+- [Workload guide](https://github.com/BenSmith/workloadctl/blob/main/docs/workloads.md) — Full configuration reference
+- [CLI reference](https://github.com/BenSmith/workloadctl/blob/main/docs/cli.md) — All commands and options
+- [Secrets management](https://github.com/BenSmith/workloadctl/blob/main/docs/secrets.md) — TPM2-encrypted credentials
+- [Schema reference](https://github.com/BenSmith/workloadctl/blob/main/docs/schema-reference.toml) — Annotated TOML schema
+- [Example configs](https://github.com/BenSmith/workloadctl/tree/main/workloads) — Real-world workload definitions, one bundle per directory
+- [Troubleshooting](https://github.com/BenSmith/workloadctl/blob/main/docs/troubleshooting.md) — Common issues and fixes
 - [Emergency recovery](docs/emergency-recovery.md) — Boot recovery procedures
 
 ## License

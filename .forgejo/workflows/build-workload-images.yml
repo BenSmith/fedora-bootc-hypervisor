@@ -7,8 +7,10 @@ name: Build Workload Images
 # refreshed via `workloadctl update`) instead of running `workloadctl build`
 # locally on every box.
 #
-# Mostly dormant: on push it only rebuilds the workloads whose bundle actually
-# changed (these images rarely move). workflow_dispatch can force a subset or
+# The bundles are workloadctl's, from the RPM hypervisor.Containerfile pins,
+# and this repository's own under bundles/, where it has one (one of the same
+# name replaces workloadctl's). Mostly dormant: on push it rebuilds the own
+# bundles that changed, and every bundle when the workloadctl pin moves. workflow_dispatch can force a subset or
 # all. Bundle images are ordinary OCI builds — no rechunk, no bootc plumbing —
 # so this is a much lighter pipeline than build-hypervisor.yml, which it
 # otherwise mirrors (native runner, registry.local, sealed-key signing).
@@ -28,15 +30,19 @@ on:
   push:
     branches: [main]
     paths:
-      - 'workloadctl/workloads/**'
+      - 'bundles/**'
       # Docs never reach an image, so a README edit should not trigger a build
       # + signing round that moves :latest to a new digest for no content
       # change. Belt and braces: ci-workload-images.py applies the same rule
       # when it computes the matrix, so if this negation is not honoured the
       # run still resolves to an empty matrix and skips the build job.
-      - '!workloadctl/workloads/**/*.md'
+      - '!bundles/**/*.md'
+      # The workloadctl pin; a change elsewhere in it selects nothing.
+      - 'hypervisor.Containerfile'
+      - 'copr/**'
       - '.forgejo/workflows/build-workload-images.yml'
       - '.forgejo/scripts/ci-workload-images.py'
+      - '.forgejo/scripts/workloadctl-root'
       - '.forgejo/scripts/ci-scan.py'
       - '.forgejo/cve-allowlist.txt'
 
@@ -62,12 +68,19 @@ jobs:
           # silently to building *every* bundle. Repo is small; depth 0 is cheap.
           fetch-depth: 0
 
+      - name: workloadctl at the image's pin
+        # Its modules and the bundles it ships, from the RPMs
+        # hypervisor.Containerfile pins, unpacked and not installed.
+        run: |
+          .forgejo/scripts/workloadctl-root "$RUNNER_TEMP/workloadctl-root"
+          echo "WORKLOADCTL_ROOT=$RUNNER_TEMP/workloadctl-root" >> "$GITHUB_ENV"
+
       - name: Test the CI helper
         # Pure-function coverage for ci-workload-images.py (ref rewriting, the
         # [[build.variants]] arg_env cross-check). Milliseconds, no podman, no
         # registry — and it guards the step immediately below. Deliberately not
-        # part of `just test`: importing the helper exports WORKLOAD_*_DIR at
-        # module scope and would poison workloadctl's shared-process suite.
+        # part of `just test`: it needs workloadctl's modules, from the step
+        # above, and importing the helper exports WORKLOAD_*_DIR at module scope.
         run: |
           python3 .forgejo/scripts/test_ci_workload_images.py
           python3 .forgejo/scripts/test_ci_scan.py
@@ -85,6 +98,12 @@ jobs:
             # unknown (new branch / all-zeros), fall back to building all.
             if git rev-parse --quiet --verify "${BEFORE}^{commit}" >/dev/null 2>&1; then
               CHANGED_FILES="$(git diff --name-only "${BEFORE}" "${SHA}")"
+              # A new workloadctl can change any bundle it ships.
+              if git diff "${BEFORE}" "${SHA}" -- hypervisor.Containerfile \
+                  | grep -q '^[-+]ARG WORKLOADCTL_VERSION='; then
+                echo "workloadctl pin moved: building all workloads"
+                SELECT="all"
+              fi
             else
               # Announce it: this fallback builds everything, so a silent hit
               # looks like a legitimately huge matrix rather than a broken diff.
@@ -125,6 +144,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: workloadctl at the image's pin
+        # Its modules and the bundles it ships, from the RPMs
+        # hypervisor.Containerfile pins, unpacked and not installed.
+        run: |
+          .forgejo/scripts/workloadctl-root "$RUNNER_TEMP/workloadctl-root"
+          echo "WORKLOADCTL_ROOT=$RUNNER_TEMP/workloadctl-root" >> "$GITHUB_ENV"
+
       - name: Build image
         env:
           NAME: ${{ matrix.workload }}
@@ -135,6 +161,7 @@ jobs:
           # helper reuses lib/imagebuild.py so this is exactly what
           # `workloadctl build ${NAME}` produces, tagged for the registry.
           sudo env REGISTRY="${REGISTRY}" REFS_OUT="${REFS_OUT}" \
+            WORKLOADCTL_ROOT="${WORKLOADCTL_ROOT}" \
             python3 .forgejo/scripts/ci-workload-images.py build "${NAME}"
 
       - name: Scan for fixable critical vulnerabilities

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# The image's pinned workloadctl and moatery RPMs (hypervisor.Containerfile's
+# WORKLOADCTL_VERSION and MOATERY_VERSION), fetched and checked as the image
+# fetches them and unpacked under ROOT: workloadctl's modules and shipped
+# bundles, and the moatery they import, for ci-workload-images.py's
+# WORKLOADCTL_ROOT. Nothing is installed.
+set -euo pipefail
+[ "$#" -eq 1 ] || { echo "usage: $0 ROOT" >&2; exit 2; }
+repo=$(realpath "$(dirname "$(realpath "$0")")/../..")
+root=$1
+rm -rf "$root"
+mkdir -p "$root"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+for project in workloadctl moatery; do
+  arg="$(echo "$project" | tr a-z A-Z)_VERSION"
+  version=$(sed -n "s/^ARG ${arg}=//p" "$repo/hypervisor.Containerfile")
+  if [ -z "$version" ]; then
+    echo "hypervisor.Containerfile has no ARG ${arg}=" >&2
+    exit 1
+  fi
+  "$repo/copr/fetch" "$project" "$version" "$work/$project.rpm"
+  (cd "$root" && rpm2cpio "$work/$project.rpm" | cpio -idm --quiet)
+done

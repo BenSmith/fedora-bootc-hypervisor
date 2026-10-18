@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """`ci-workload-images.py` — the multi-variant publishing path.
 
-Run it directly; it is deliberately NOT under `workloadctl/tests/`:
+Run it directly, with WORKLOADCTL_ROOT naming workloadctl's RPM root (see
+ci-workload-images.py); it is deliberately NOT under `tests/`:
 
-    python3 -m unittest .forgejo/scripts/test_ci_workload_images.py
-    python3 .forgejo/scripts/test_ci_workload_images.py
+    WORKLOADCTL_ROOT=... python3 .forgejo/scripts/test_ci_workload_images.py
 
 The CI helper had no coverage, and `[[build.variants]]` added real logic to it:
 ref-tag rewriting, an arg_env cross-check, and a temporary environment
 override. Those are pure functions, so they need neither podman nor a registry
 — which is why they were factored out that way.
 
-WHY NOT IN workloadctl/tests/: importing this script is destructive to a shared
-test process. At module scope it exports WORKLOAD_CONFIG_DIR /
-WORKLOAD_BUNDLES_DIR pointing at the REAL repo tree and imports
-workloadctl_core, which reads them at import time. `unittest discover` would
-run this file first alphabetically, so the rest of the suite then resolved
-bundles from the real tree instead of its own temp /usr + /etc — 67 failures,
-690 errors, and it wrote 15 fixture bundles (coolapp, withfiles, myvm, ...)
-into workloadctl/workloads/ as untracked junk. The teardown below undoes the
-import, but keeping this out of the discovery path is the actual fix; the
-teardown is belt and braces for anyone who moves it back.
+WHY NOT IN tests/: it needs workloadctl's modules, which this repository does
+not hold, and importing this script is destructive to a shared test process.
+At module scope it exports WORKLOAD_CONFIG_DIR / WORKLOAD_BUNDLES_DIR pointing
+at a real bundles tree and imports workloadctl_core, which reads them at
+import time; a suite sharing the process then resolves bundles from that tree
+instead of its own (67 failures and 690 errors, when workloadctl's suite lived
+beside this file). The teardown below undoes the import; keeping this out of
+the discovery path is the actual fix.
 
 The load-bearing case is `test_rejects_args_not_declared_in_arg_env`. A variant
 arg that `[build].arg_env` does not declare is silently dropped by
@@ -44,16 +42,12 @@ def _load_ci_module():
 
     Importing it is DESTRUCTIVE to a shared test process and must be undone.
     The script is a CI entrypoint, so at module scope it exports
-    WORKLOAD_CONFIG_DIR / WORKLOAD_BUNDLES_DIR pointing at the real repo tree,
-    prepends lib/ to sys.path, and imports workloadctl_core — which reads those
-    vars at import time and caches them in sys.modules.
-
-    `unittest discover` runs this file before the rest alphabetically, so
-    leaving any of that behind makes every later test resolve bundles from the
-    real tree instead of its own temp /usr + /etc. That is not hypothetical: it
-    produced 67 failures and 690 errors across the suite before this teardown
-    existed. Restore the environment, sys.path, and sys.modules to exactly what
-    we found.
+    WORKLOAD_CONFIG_DIR / WORKLOAD_BUNDLES_DIR pointing at a real bundles
+    tree, prepends workloadctl's modules to sys.path, and imports
+    workloadctl_core — which reads those vars at import time and caches them
+    in sys.modules. Leaving any of that behind makes a later test in the same
+    process resolve bundles from that tree instead of its own. Restore the
+    environment, sys.path, and sys.modules to exactly what we found.
     """
     saved_env = dict(os.environ)
     saved_path = list(sys.path)

@@ -5,9 +5,14 @@ push them to the homelab registry.
 This is glue for `.forgejo/workflows/build-workload-images.yml`. It reuses
 workloadctl's own build machinery (lib/imagebuild.py) rather than
 reimplementing Containerfile / build-arg / target / context-exclusion handling,
-so a CI build is byte-for-byte what `workloadctl build <name>` produces. The
-two env overrides below repoint that machinery at the checked-out
-`workloadctl/workloads/` tree instead of the installed /usr + /etc trees:
+so a CI build is byte-for-byte what `workloadctl build <name>` produces.
+That machinery, and the bundles it ships, come from workloadctl's RPM under
+WORKLOADCTL_ROOT: / where it is installed, or the tree
+`.forgejo/scripts/workloadctl-root` unpacks the image's pinned RPMs into. This
+repository's own bundles/, where it has one, are built beside them, and one
+of the same name replaces the shipped bundle. Both are put in one tree of
+symlinks, and the two env overrides below repoint workloadctl at it instead of
+the installed /usr + /etc trees:
 
   WORKLOAD_CONFIG_DIR   → where WorkloadConfig(name) reads <name>/workload.toml
   WORKLOAD_BUNDLES_DIR  → the bundle_dir build context (the shipped /usr tree)
@@ -37,22 +42,49 @@ not in lib/.
 `build` must run as root (podman build into the root store, matching the
 hypervisor image pipeline); the workflow invokes it under sudo.
 """
+import atexit
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WORKLOADS_TREE = REPO_ROOT / "workloadctl" / "workloads"
+WORKLOADCTL_ROOT = Path(os.environ.get("WORKLOADCTL_ROOT", "/"))
+SHIPPED_BUNDLES = WORKLOADCTL_ROOT / "usr" / "share" / "workloadctl" / "workloads"
+OWN_BUNDLES = REPO_ROOT / "bundles"
 
-# Repoint workloadctl's path resolution at the checked-out tree BEFORE importing
-# the lib (both constants are read at import time).
+
+def _bundles_tree() -> Path:
+    """A directory holding a symlink to every bundle, shipped then own, so
+    an own bundle replaces a shipped one of its name."""
+    if not (SHIPPED_BUNDLES.is_dir() or OWN_BUNDLES.is_dir()):
+        sys.exit(f"no bundles under {SHIPPED_BUNDLES} or {OWN_BUNDLES}: set "
+                 f"WORKLOADCTL_ROOT to workloadctl's RPM root")
+    tree = Path(tempfile.mkdtemp(prefix="ci-workload-bundles-"))
+    atexit.register(shutil.rmtree, tree, True)
+    for source in (SHIPPED_BUNDLES, OWN_BUNDLES):
+        for toml in sorted(source.glob("*/workload.toml")):
+            link = tree / toml.parent.name
+            if link.is_symlink():
+                link.unlink()
+            link.symlink_to(toml.parent)
+    return tree
+
+
+WORKLOADS_TREE = _bundles_tree()
+
+# Repoint workloadctl's path resolution at the tree BEFORE importing the lib
+# (both constants are read at import time).
 os.environ.setdefault("WORKLOAD_CONFIG_DIR", str(WORKLOADS_TREE))
 os.environ.setdefault("WORKLOAD_BUNDLES_DIR", str(WORKLOADS_TREE))
 
-sys.path.insert(0, str(REPO_ROOT / "workloadctl" / "lib"))
+sys.path[:0] = [str(WORKLOADCTL_ROOT / "usr" / "libexec" / "workloadctl"),
+                *(str(p) for p in sorted(
+                    WORKLOADCTL_ROOT.glob("usr/lib/python3*/site-packages")))]
 
 import imagebuild  # noqa: E402
 from workloadctl_core import WorkloadConfig  # noqa: E402
@@ -221,9 +253,10 @@ def cmd_list() -> int:
             if path.suffix.lower() == ".md":
                 continue
             parts = path.parts
-            # workloadctl/workloads/<name>/...
-            if len(parts) >= 3 and parts[0] == "workloadctl" and parts[1] == "workloads":
-                touched.add(parts[2])
+            # bundles/<name>/...: a shipped bundle changes with the pin,
+            # which the workflow answers with SELECT=all.
+            if len(parts) >= 2 and parts[0] == "bundles":
+                touched.add(parts[1])
         names = [n for n in buildable if n in touched]
     else:
         names = buildable

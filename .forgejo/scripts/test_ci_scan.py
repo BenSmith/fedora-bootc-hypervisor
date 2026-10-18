@@ -185,10 +185,18 @@ class Runners(unittest.TestCase):
     refuses to push an image it has not scanned."""
 
     BUNDLES = ("forgejo-runner",)
+    # workloadctl ships the runner bundles; its RPM root, as
+    # ci-workload-images.py reads it.
+    SHIPPED = (Path(os.environ.get("WORKLOADCTL_ROOT", "/"))
+               / "usr" / "share" / "workloadctl" / "workloads")
+
+    def setUp(self):
+        if not self.SHIPPED.is_dir():
+            self.skipTest(f"no workloadctl bundles at {self.SHIPPED}: set "
+                          f"WORKLOADCTL_ROOT")
 
     def _packages(self, bundle):
-        text = (HERE.parents[1] / "workloadctl" / "workloads" / bundle
-                / "cloud-init" / "user-data").read_text()
+        text = (self.SHIPPED / bundle / "cloud-init" / "user-data").read_text()
         command = text.split("dnf install -y --skip-broken", 1)[1]
         command = command.split("\n\n", 1)[0].replace("\\\n", " ")
         return command.split()

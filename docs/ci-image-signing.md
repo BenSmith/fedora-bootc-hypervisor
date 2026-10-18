@@ -104,7 +104,8 @@ at the seal workflow. Nothing unsigned reaches the registry.
 ## Logging in to push
 
 The registry lets anyone read and only `ci` push, to CI's repositories
-(`workloadctl/workloads/zot-registry/README.md`). The login is sealed the same
+(workloadctl's zot-registry bundle, https://github.com/BenSmith/workloadctl/blob/main/workloads/zot-registry/README.md).
+The login is sealed the same
 way as the key, by `.forgejo/workflows/seal-registry-auth.yml`: it reads
 `secrets.REGISTRY_CI_PASSWORD`, seals a containers `auth.json` for
 `registry.local` as `/etc/forgejo-runner/creds/registry-auth.cred`, adds a

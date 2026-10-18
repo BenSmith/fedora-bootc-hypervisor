@@ -28,7 +28,7 @@ The base hypervisor image (`hypervisor.Containerfile`) is headless and includes:
 
 - **Virtualization**: libvirt, QEMU/KVM, virt-install, virtiofsd, edk2-ovmf, libtpms
 - **Application containers**: Podman 5, podman-compose, crun, skopeo, distrobox
-- **Workload management**: workloadctl (installed from RPM, built in a multi-stage Containerfile)
+- **Workload management**: workloadctl (installed from its Copr project's RPM, at the release the Containerfile pins)
 - **Networking**: firewalld, NetworkManager, bridge-utils, wireguard-tools, dnsmasq
 - **Storage**: btrfs-progs, xfsprogs, lvm2, mdadm, cifs-utils, NVMe tools
 - **Monitoring**: btop, htop, iotop, sysstat, smartmontools, lm_sensors
@@ -47,9 +47,9 @@ Each inherits from hypervisor-bootc and adds kernel GPU drivers:
 
 ## Workload System (workloadctl)
 
-The `workloadctl/` subdirectory is a standalone tool (RPM-packaged, no bootc dependency) that turns declarative TOML configs into isolated workloads across two substrates: rootless podman containers (the common case) and KVM/QEMU VMs (declared with a `[vm]` section). Each workload gets a dedicated system user, subuid namespace, systemd service, volume management, and optional TPM2-encrypted secrets.
+[workloadctl](https://github.com/BenSmith/workloadctl) is a standalone tool, developed in its own repository (RPM-packaged, no bootc dependency), that turns declarative TOML configs into isolated workloads across two substrates: rootless podman containers (the common case) and KVM/QEMU VMs (declared with a `[vm]` section). Each workload gets a dedicated system user, subuid namespace, systemd service, volume management, and optional TPM2-encrypted secrets.
 
-See [workloadctl/llms.txt](workloadctl/llms.txt) for full detail on architecture, CLI commands, and configuration schema.
+See [workloadctl's llms.txt](https://github.com/BenSmith/workloadctl/blob/main/llms.txt) for full detail on architecture, CLI commands, and configuration schema. The image installs the release `ARG WORKLOADCTL_VERSION` pins; `WORKLOADCTL_LOCAL=<checkout or RPM> just build-base-local` builds with a local one.
 
 Quick example:
 ```bash
@@ -71,7 +71,7 @@ Two consequences worth knowing. A broken Containerfile here is discovered at the
 ## Repository Structure
 
 ```
-hypervisor.Containerfile                  Base hypervisor image (multi-stage: builds workloadctl RPM)
+hypervisor.Containerfile                  Base hypervisor image (fetch stages: the pinned workloadctl and moatery RPMs)
 fedora-bootc-minimal.Containerfile        Minimal bootc base (Podman 4 compatible for GitHub CI)
 hypervisor-amd.Containerfile              AMD GPU variant
 hypervisor-nvidia-rpmfusion.Containerfile NVIDIA RPMFusion variant
@@ -79,7 +79,8 @@ hypervisor-nvidia-negativo17.Containerfile NVIDIA negativo17 variant
 negativo17-rpms.Containerfile             negativo17's driver packages as an image (Forgejo builds install from it)
 negativo17/                               its package list and negativo17's pinned signing key
 
-workloadctl/                              Workload management system (see workloadctl/llms.txt)
+copr/                                     fetch: a Copr project's RPM, signature checked against <project>.gpg
+tests/                                    The image's checks (`just test`)
 
 bin/cosy                                  Interactive container session wrapper
 man/cosy.1                                cosy man page
@@ -132,13 +133,13 @@ docs/
   ideas.md                                Scratch list, not a plan of record
 
 .github/workflows/                        build-minimal-bootc.yml (weekly Sat), build-hypervisor.yml (weekly Sun),
-                                          workloadctl-test.yml (PR gate)
-.forgejo/workflows/                       Mirrors of the above (minimal Sun, hypervisor Mon) plus four Forgejo-only:
-                                          workloadctl-runtime.yml (weekly Tue), seal-signing-key.yml,
-                                          build-workload-images.yml, build-hypervisor-f44-quick.yml. No drift
-                                          check between the forges.
-.forgejo/scripts/ci-workload-images.py    Builds workload images from the checked-out tree via workloadctl's own
-                                          lib/imagebuild.py; `list` feeds the CI matrix
+                                          image-test.yml (PR gate)
+.forgejo/workflows/                       Mirrors of the above (minimal Sun, hypervisor Mon) plus Forgejo-only:
+                                          seal-signing-key.yml, build-workload-images.yml, scan-images.yml,
+                                          build-hypervisor-f44-quick.yml. No drift check between the forges.
+.forgejo/scripts/ci-workload-images.py    Builds workload images via workloadctl's own imagebuild, from the pinned
+                                          RPM unpacked by workloadctl-root (plus bundles/, where there is one);
+                                          `list` feeds the CI matrix
 
 justfile                                  Build automation (see Build System below)
 ```
@@ -160,9 +161,7 @@ All builds use [just](https://github.com/casey/just). Key targets:
 
 **Development:**
 - `just aio-local` — Build image, create QCOW2, deploy to libvirt VM (all-in-one)
-- `just test` / `just test-unit` / `just test-integration` — workloadctl tests (delegate into `workloadctl/`)
-- `just test-cli <target>` — workloadctl rung-3 CLI-surface tests
-- `just test-all-runtime [target]` / `just test-all-runtime-remote <host>` — the runtime rung, locally or over SSH
+- `just test` — the image's checks (tests/); workloadctl's suites are its repository's
 - `just push-all` — Tag and push all images to local registry
 
 ## Installation
@@ -209,11 +208,11 @@ sudo bootc switch ghcr.io/bensmith/hypervisor-amd:44
 
 ## Documentation
 
-- [workloadctl/README.md](workloadctl/README.md) — Workload system overview and quick start
-- [workloadctl/docs/workloads.md](workloadctl/docs/workloads.md) — Full configuration guide
-- [workloadctl/docs/cli.md](workloadctl/docs/cli.md) — CLI reference
-- [workloadctl/docs/secrets.md](workloadctl/docs/secrets.md) — Secrets management
-- [workloadctl/docs/troubleshooting.md](workloadctl/docs/troubleshooting.md) — Common workload issues and fixes
+- [workloadctl README](https://github.com/BenSmith/workloadctl/blob/main/README.md) — Workload system overview and quick start
+- [workloadctl workload guide](https://github.com/BenSmith/workloadctl/blob/main/docs/workloads.md) — Full configuration guide
+- [workloadctl CLI reference](https://github.com/BenSmith/workloadctl/blob/main/docs/cli.md) — CLI reference
+- [workloadctl secrets](https://github.com/BenSmith/workloadctl/blob/main/docs/secrets.md) — Secrets management
+- [workloadctl troubleshooting](https://github.com/BenSmith/workloadctl/blob/main/docs/troubleshooting.md) — Common workload issues and fixes
 - [docs/emergency-recovery.md](docs/emergency-recovery.md) — Boot recovery
 
 ## License

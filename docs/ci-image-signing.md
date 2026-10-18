@@ -136,3 +136,10 @@ tag rebuilt independently, or copied across repositories, is not covered. On
 GitHub the equivalent guarantee is asserted explicitly — after signing the
 digest, the workflow runs `cosign verify` against the digest *and* against every
 published tag.
+
+On both forges a floating tag moves only after the signature over the digest
+has verified. Hosts follow those tags under a `sigstoreSigned` policy, so a tag
+moved first and a signing that then failed would leave every host refusing its
+next update until a good build; verifying first leaves the tag on the last
+signed image. `tests/test_ci_tags_follow_signatures.py` holds every publishing
+job to that order.

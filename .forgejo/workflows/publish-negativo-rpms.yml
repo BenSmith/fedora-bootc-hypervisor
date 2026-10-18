@@ -106,6 +106,16 @@ jobs:
           sudo podman tag "localhost/negativo-rpms:build-${VERSION}" "${IMAGE_BASE}:${VERSION}-${DRIVER}"
           sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile "$WORK/digest" "${IMAGE_BASE}:${VERSION}-${DRIVER}"
           DIGEST=$(cat "$WORK/digest")
+          # A push can succeed without attaching a signature, so the digest is
+          # verified before the floating tag moves: a push that signed nothing
+          # leaves the tag on the last signed build instead of on one the
+          # hypervisor builds refuse.
+          printf '{"default":[{"type":"reject"}],"transports":{"docker":{"%s":[{"type":"sigstoreSigned","keyPath":"%s","signedIdentity":{"type":"matchRepository"}}]}}}' \
+            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > "$WORK/verify-policy.json"
+          if ! sudo podman pull -q --signature-policy="$WORK/verify-policy.json" "${IMAGE_BASE}@${DIGEST}" >/dev/null; then
+            echo "::error::signature verification failed for ${IMAGE_BASE}@${DIGEST} — the push did not produce a valid signature"
+            exit 1
+          fi
           # The floating tag is copied from the signed digest within the same
           # repository, so that digest's signature covers it.
           sudo skopeo copy "${AUTH_ARGS[@]}" "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${VERSION}"

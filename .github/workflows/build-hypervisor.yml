@@ -171,26 +171,11 @@ jobs:
           IMAGE_BASE: ${{ steps.params.outputs.image_base }}
           VERSION: ${{ matrix.fedora_version }}
           TAG: ${{ steps.params.outputs.tag }}
-          STABLE: ${{ needs.setup.outputs.stable }}
         run: |
           VERSIONED="${VERSION}-${TAG}"
-          FLOATING="${VERSION}"
-
           sudo podman tag localhost/hypervisor-bootc:rechunked "${IMAGE_BASE}:${VERSIONED}"
           sudo podman push --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
-          DIGEST=$(cat /tmp/digest.txt)
-
-          PUBLISHED=("${VERSIONED}" "${FLOATING}")
-          sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${FLOATING}"
-          if [ "${VERSION}" = "${STABLE}" ]; then
-            sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:latest"
-            PUBLISHED+=("latest")
-          fi
-
-          {
-            echo "digest=${DIGEST}"
-            printf 'tags<<EOF\n%s\nEOF\n' "${PUBLISHED[*]}"
-          } >> "$GITHUB_OUTPUT"
+          echo "digest=$(cat /tmp/digest.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Sign base
         env:
@@ -199,16 +184,36 @@ jobs:
           DIGEST: ${{ steps.push_base.outputs.digest }}
         run: |
           cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_BASE}@${DIGEST}"
+          cosign verify --key cosign.pub "${IMAGE_BASE}@${DIGEST}" > /dev/null
+          echo "signature verified: ${IMAGE_BASE}@${DIGEST}"
+
+      - name: Move base floating tags
+        id: floating_base
+        env:
+          IMAGE_BASE: ${{ steps.params.outputs.image_base }}
+          VERSION: ${{ matrix.fedora_version }}
+          TAG: ${{ steps.params.outputs.tag }}
+          STABLE: ${{ needs.setup.outputs.stable }}
+          DIGEST: ${{ steps.push_base.outputs.digest }}
+        run: |
+          # Only after the signature over the digest has verified: a signing
+          # that fails leaves these on the last signed image instead of on one
+          # every host's sigstoreSigned policy refuses.
+          PUBLISHED=("${VERSION}-${TAG}" "${VERSION}")
+          sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${VERSION}"
+          if [ "${VERSION}" = "${STABLE}" ]; then
+            sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:latest"
+            PUBLISHED+=("latest")
+          fi
+          printf 'tags<<EOF\n%s\nEOF\n' "${PUBLISHED[*]}" >> "$GITHUB_OUTPUT"
 
       - name: Verify base
         env:
           IMAGE_BASE: ${{ steps.params.outputs.image_base }}
-          DIGEST: ${{ steps.push_base.outputs.digest }}
-          TAGS: ${{ steps.push_base.outputs.tags }}
+          TAGS: ${{ steps.floating_base.outputs.tags }}
         run: |
           # Every published tag must resolve to the signed manifest, not just
           # the digest that was signed.
-          cosign verify --key cosign.pub "${IMAGE_BASE}@${DIGEST}" > /dev/null
           for t in $TAGS; do
             cosign verify --key cosign.pub "${IMAGE_BASE}:${t}" > /dev/null
             echo "signature verified: ${IMAGE_BASE}:${t}"
@@ -381,18 +386,47 @@ jobs:
           BASE_TAG: ${{ needs.build-base.outputs.tag }}
           IMAGE: ${{ matrix.variant.image }}
           PREFIX: ${{ matrix.variant.prefix }}
+          VERSION: ${{ matrix.fedora_version }}
+        run: |
+          IMAGE_BASE="ghcr.io/${OWNER}/${IMAGE}"
+          VERSIONED="${PREFIX}${VERSION}-${BASE_TAG}"
+
+          sudo podman tag "localhost/${IMAGE}:rechunked" "${IMAGE_BASE}:${VERSIONED}"
+          sudo podman push --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
+
+          {
+            echo "image_base=${IMAGE_BASE}"
+            echo "versioned_tag=${VERSIONED}"
+            echo "floating_tag=${PREFIX}${VERSION}"
+            echo "digest=$(cat /tmp/digest.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sign variant
+        if: steps.gate.outputs.build == 'true'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_SECRET }}
+          IMAGE_BASE: ${{ steps.push.outputs.image_base }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_BASE}@${DIGEST}"
+          cosign verify --key cosign.pub "${IMAGE_BASE}@${DIGEST}" > /dev/null
+          echo "signature verified: ${IMAGE_BASE}@${DIGEST}"
+
+      - name: Move variant floating tags
+        if: steps.gate.outputs.build == 'true'
+        id: floating
+        env:
+          IMAGE_BASE: ${{ steps.push.outputs.image_base }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          VERSIONED: ${{ steps.push.outputs.versioned_tag }}
+          FLOATING_TAG: ${{ steps.push.outputs.floating_tag }}
           FLOATING: ${{ matrix.variant.floating }}
           VERSION: ${{ matrix.fedora_version }}
           STABLE: ${{ needs.setup.outputs.stable }}
         run: |
-          IMAGE_BASE="ghcr.io/${OWNER}/${IMAGE}"
-          VERSIONED="${PREFIX}${VERSION}-${BASE_TAG}"
-          FLOATING_TAG="${PREFIX}${VERSION}"
-
-          sudo podman tag "localhost/${IMAGE}:rechunked" "${IMAGE_BASE}:${VERSIONED}"
-          sudo podman push --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
-          DIGEST=$(cat /tmp/digest.txt)
-
+          # Only after the signature over the digest has verified: a signing
+          # that fails leaves these on the last signed image instead of on one
+          # every host's sigstoreSigned policy refuses.
           PUBLISHED=("${VERSIONED}" "${FLOATING_TAG}")
           sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${FLOATING_TAG}"
 
@@ -408,34 +442,16 @@ jobs:
             sudo skopeo copy "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${STABLE_FLOATING}"
             PUBLISHED+=("${STABLE_FLOATING}")
           fi
-
-          {
-            echo "image_base=${IMAGE_BASE}"
-            echo "versioned_tag=${VERSIONED}"
-            echo "floating_tag=${FLOATING_TAG}"
-            echo "digest=$(cat /tmp/digest.txt)"
-            printf 'tags<<EOF\n%s\nEOF\n' "${PUBLISHED[*]}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Sign variant
-        if: steps.gate.outputs.build == 'true'
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_SECRET }}
-          IMAGE_BASE: ${{ steps.push.outputs.image_base }}
-          DIGEST: ${{ steps.push.outputs.digest }}
-        run: |
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_BASE}@${DIGEST}"
+          printf 'tags<<EOF\n%s\nEOF\n' "${PUBLISHED[*]}" >> "$GITHUB_OUTPUT"
 
       - name: Verify variant
         if: steps.gate.outputs.build == 'true'
         env:
           IMAGE_BASE: ${{ steps.push.outputs.image_base }}
-          DIGEST: ${{ steps.push.outputs.digest }}
-          TAGS: ${{ steps.push.outputs.tags }}
+          TAGS: ${{ steps.floating.outputs.tags }}
         run: |
           # Every published tag must resolve to the signed manifest, not just
           # the digest that was signed.
-          cosign verify --key cosign.pub "${IMAGE_BASE}@${DIGEST}" > /dev/null
           for t in $TAGS; do
             cosign verify --key cosign.pub "${IMAGE_BASE}:${t}" > /dev/null
             echo "signature verified: ${IMAGE_BASE}:${t}"

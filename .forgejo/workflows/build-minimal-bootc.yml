@@ -154,6 +154,10 @@ jobs:
           # of the same local image yields a different manifest digest, which
           # the first push's digest-addressed signature would not cover, so the
           # floating tags are skopeo-copied from the signed digest instead.
+          # This step's own files: jobs run side by side on the runner, and a
+          # digest read from a shared path can be another job's.
+          WORK=$(mktemp -d)
+          trap 'sudo rm -rf "$WORK"' EXIT
           CREDS=/run/credentials/forgejo-runner.service
           if ! sudo test -s "${CREDS}/cosign-key"; then
             echo "::error::no signing credential at ${CREDS}/cosign-key — refusing to push unsigned. Run the seal-signing-key workflow, then re-run this build."
@@ -169,8 +173,8 @@ jobs:
 
           DATED="${TAGS[0]}"
           sudo podman tag "localhost/${IMAGE_NAME}:rechunked-${VERSION}" "${IMAGE_BASE}:${DATED}"
-          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${DATED}"
-          DIGEST=$(cat /tmp/digest.txt)
+          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile "$WORK/digest" "${IMAGE_BASE}:${DATED}"
+          DIGEST=$(cat "$WORK/digest")
 
           for t in "${TAGS[@]:1}"; do
             sudo skopeo copy "${AUTH_ARGS[@]}" "docker://${IMAGE_BASE}@${DIGEST}" "docker://${IMAGE_BASE}:${t}"
@@ -179,9 +183,9 @@ jobs:
           # then refuses the image, so verify the attachment resolves and validates
           # before anything downstream consumes this digest.
           printf '{"default":[{"type":"reject"}],"transports":{"docker":{"%s":[{"type":"sigstoreSigned","keyPath":"%s","signedIdentity":{"type":"matchRepository"}}]}}}' \
-            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > /tmp/verify-policy.json
+            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > "$WORK/verify-policy.json"
           for ref in "${IMAGE_BASE}@${DIGEST}" "${TAGS[@]/#/${IMAGE_BASE}:}"; do
-            if ! sudo podman pull -q --signature-policy=/tmp/verify-policy.json "${ref}" >/dev/null; then
+            if ! sudo podman pull -q --signature-policy="$WORK/verify-policy.json" "${ref}" >/dev/null; then
               echo "::error::signature verification failed for ${ref} — it does not resolve to a signed manifest"
               exit 1
             fi

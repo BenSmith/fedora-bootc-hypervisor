@@ -1,6 +1,7 @@
 """Each OS image is checked for security updates it lacks, report only,
 after its rechunk and before its push, so a fresh advisory cannot hold
 the hosts' updates."""
+import re
 import unittest
 
 from tests import REPO_ROOT
@@ -25,9 +26,11 @@ class OsImages(unittest.TestCase):
             for i in scans:
                 self.assertTrue(names[i - 1].startswith("Rechunk"), name)
                 self.assertTrue(names[i + 1].startswith("Tag and push"), name)
-                ref = steps[i - 1].rsplit(":rechunked-", 1)[1].split('"')[0]
-                self.assertIn(f"ci-os-scan.sh ", steps[i])
-                self.assertIn(f":rechunked-{ref}", steps[i])
+                # The rechunk's output, its last quoted argument, is what
+                # the check reads and what the push tags.
+                ref = re.findall(r'"[^"]+"', steps[i - 1])[-1]
+                self.assertIn(f"ci-os-scan.sh {ref}", steps[i])
+                self.assertIn(f"podman tag {ref} ", steps[i + 1])
                 gate = [ln for ln in steps[i - 1].splitlines()
                         if ln.strip().startswith("if:")]
                 for ln in gate:

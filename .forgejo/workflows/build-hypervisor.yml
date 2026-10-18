@@ -85,6 +85,17 @@ jobs:
         fedora_version: ${{ fromJson(needs.setup.outputs.versions) }}
 
     steps:
+      - name: Name this job's local images
+        # Unique to this run and this matrix entry. Jobs share the runner's
+        # image store and run side by side, and a tag two jobs can write is
+        # one either can move or untag under the other.
+        env:
+          VERSION: ${{ matrix.fedora_version }}
+        run: |
+          ref="localhost/hypervisor-bootc:${VERSION}-${GITHUB_RUN_ID}"
+          echo "LOCAL_BUILD=${ref}-build" >> "$GITHUB_ENV"
+          echo "LOCAL_RECHUNKED=${ref}-rechunked" >> "$GITHUB_ENV"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -141,25 +152,22 @@ jobs:
             --build-arg BASE_IMAGE=${REGISTRY}/fedora-bootc-minimal:${VERSION} \
             --build-arg FEDORA_VERSION=${VERSION} \
             -f hypervisor.Containerfile \
-            -t "localhost/hypervisor-bootc:build-${VERSION}" \
+            -t "${LOCAL_BUILD}" \
             .
 
       - name: Rechunk base image
         env:
-          VERSION: ${{ matrix.fedora_version }}
           RECHUNKER: ${{ needs.setup.outputs.rechunker }}
         run: |
           sudo podman run --rm --privileged \
             -v /var/lib/containers:/var/lib/containers \
             quay.io/fedora/fedora-bootc:${RECHUNKER} \
             /usr/libexec/bootc-base-imagectl rechunk \
-            "localhost/hypervisor-bootc:build-${VERSION}" \
-            "localhost/hypervisor-bootc:rechunked-${VERSION}"
+            "${LOCAL_BUILD}" \
+            "${LOCAL_RECHUNKED}"
 
       - name: Check for missing security updates (report only)
-        env:
-          VERSION: ${{ matrix.fedora_version }}
-        run: bash .forgejo/scripts/ci-os-scan.sh "localhost/hypervisor-bootc:rechunked-${VERSION}"
+        run: bash .forgejo/scripts/ci-os-scan.sh "${LOCAL_RECHUNKED}"
 
       - name: Tag and push base
         id: push_base
@@ -183,6 +191,10 @@ jobs:
           # the registry. The floating tags are skopeo-copied from the signed
           # digest in the same repo, so the digest-addressed signature already
           # covers them.
+          # This step's own files: jobs run side by side on the runner, and a
+          # digest read from a shared path can be another job's.
+          WORK=$(mktemp -d)
+          trap 'sudo rm -rf "$WORK"' EXIT
           CREDS=/run/credentials/forgejo-runner.service
           if ! sudo test -s "${CREDS}/cosign-key"; then
             echo "::error::no signing credential at ${CREDS}/cosign-key — refusing to push unsigned. Run the seal-signing-key workflow, then re-run this build."
@@ -196,15 +208,15 @@ jobs:
           fi
           AUTH_ARGS=(--authfile "${CREDS}/registry-auth")
 
-          sudo podman tag "localhost/hypervisor-bootc:rechunked-${VERSION}" "${IMAGE_BASE}:${VERSIONED}"
-          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
-          DIGEST=$(cat /tmp/digest.txt)
+          sudo podman tag "${LOCAL_RECHUNKED}" "${IMAGE_BASE}:${VERSIONED}"
+          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile "$WORK/digest" "${IMAGE_BASE}:${VERSIONED}"
+          DIGEST=$(cat "$WORK/digest")
           # A push can succeed without attaching a signature; the shipped policy.json
           # then refuses the image, so verify the attachment resolves and validates
           # before anything downstream consumes this digest.
           printf '{"default":[{"type":"reject"}],"transports":{"docker":{"%s":[{"type":"sigstoreSigned","keyPath":"%s","signedIdentity":{"type":"matchRepository"}}]}}}' \
-            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > /tmp/verify-policy.json
-          if ! sudo podman pull -q --signature-policy=/tmp/verify-policy.json "${IMAGE_BASE}@${DIGEST}" >/dev/null; then
+            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > "$WORK/verify-policy.json"
+          if ! sudo podman pull -q --signature-policy="$WORK/verify-policy.json" "${IMAGE_BASE}@${DIGEST}" >/dev/null; then
             echo "::error::signature verification failed for ${IMAGE_BASE}@${DIGEST} — the push did not produce a valid signature"
             exit 1
           fi
@@ -237,8 +249,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup local tags
-        # Untag only what this job created. Safe under concurrent jobs
-        # because every tag is scoped by VERSION + this run's TAG.
+        # Untag only what this job created: the local tags are named for
+        # this run and matrix entry, the registry one for this run's TAG.
         # The floating registry.local/hypervisor-bootc:${VERSION} stays —
         # variant jobs pull it as their FROM base.
         if: always()
@@ -247,8 +259,8 @@ jobs:
           TAG: ${{ needs.setup.outputs.tag }}
         run: |
           IMAGE_BASE="${REGISTRY}/hypervisor-bootc"
-          sudo podman untag "localhost/hypervisor-bootc:build-${VERSION}" 2>/dev/null || true
-          sudo podman untag "localhost/hypervisor-bootc:rechunked-${VERSION}" 2>/dev/null || true
+          sudo podman untag "${LOCAL_BUILD}" 2>/dev/null || true
+          sudo podman untag "${LOCAL_RECHUNKED}" 2>/dev/null || true
           sudo podman untag "${IMAGE_BASE}:${VERSION}-${TAG}" 2>/dev/null || true
           # Reclaim the layers we just untagged (and any other dangling ones)
           # on this long-lived native runner. Dangling-only: never removes a
@@ -288,6 +300,19 @@ jobs:
             floating: 'rpmfusion'
 
     steps:
+      - name: Name this job's local images
+        # Unique to this run and this matrix entry. Jobs share the runner's
+        # image store and run side by side, and a tag two jobs can write is
+        # one either can move or untag under the other.
+        env:
+          IMAGE: ${{ matrix.variant.image }}
+          NAME: ${{ matrix.variant.name }}
+          VERSION: ${{ matrix.fedora_version }}
+        run: |
+          ref="localhost/${IMAGE}:${NAME}-${VERSION}-${GITHUB_RUN_ID}"
+          echo "LOCAL_BUILD=${ref}-build" >> "$GITHUB_ENV"
+          echo "LOCAL_RECHUNKED=${ref}-rechunked" >> "$GITHUB_ENV"
+
       - name: Decide whether to build this variant
         id: gate
         env:
@@ -344,7 +369,6 @@ jobs:
       - name: Build variant
         if: steps.gate.outputs.build == 'true'
         env:
-          IMAGE: ${{ matrix.variant.image }}
           CONTAINERFILE: ${{ matrix.variant.containerfile }}
           VERSION: ${{ matrix.fedora_version }}
           NVIDIA_RPMS: ${{ steps.nvidia.outputs.ref }}
@@ -358,29 +382,24 @@ jobs:
             --build-arg BASE=${REGISTRY}/hypervisor-bootc:${VERSION} \
             ${NVIDIA_RPMS:+--build-arg NVIDIA_RPMS=${NVIDIA_RPMS}} \
             -f "${CONTAINERFILE}" \
-            -t "localhost/${IMAGE}:build-${VERSION}" \
+            -t "${LOCAL_BUILD}" \
             .
 
       - name: Rechunk variant
         if: steps.gate.outputs.build == 'true'
         env:
-          IMAGE: ${{ matrix.variant.image }}
-          VERSION: ${{ matrix.fedora_version }}
           RECHUNKER: ${{ needs.setup.outputs.rechunker }}
         run: |
           sudo podman run --rm --privileged \
             -v /var/lib/containers:/var/lib/containers \
             quay.io/fedora/fedora-bootc:${RECHUNKER} \
             /usr/libexec/bootc-base-imagectl rechunk \
-            "localhost/${IMAGE}:build-${VERSION}" \
-            "localhost/${IMAGE}:rechunked-${VERSION}"
+            "${LOCAL_BUILD}" \
+            "${LOCAL_RECHUNKED}"
 
       - name: Check for missing security updates (report only)
         if: steps.gate.outputs.build == 'true'
-        env:
-          IMAGE: ${{ matrix.variant.image }}
-          VERSION: ${{ matrix.fedora_version }}
-        run: bash .forgejo/scripts/ci-os-scan.sh "localhost/${IMAGE}:rechunked-${VERSION}"
+        run: bash .forgejo/scripts/ci-os-scan.sh "${LOCAL_RECHUNKED}"
 
       - name: Tag and push variant
         if: steps.gate.outputs.build == 'true'
@@ -402,6 +421,10 @@ jobs:
           # systemd credentials, unsigned + warning if not sealed. Floating
           # tags are digest copies in the same repo, already covered by the
           # digest-addressed signature. See docs/ci-image-signing.md.
+          # This step's own files: jobs run side by side on the runner, and a
+          # digest read from a shared path can be another job's.
+          WORK=$(mktemp -d)
+          trap 'sudo rm -rf "$WORK"' EXIT
           CREDS=/run/credentials/forgejo-runner.service
           if ! sudo test -s "${CREDS}/cosign-key"; then
             echo "::error::no signing credential at ${CREDS}/cosign-key — refusing to push unsigned. Run the seal-signing-key workflow, then re-run this build."
@@ -415,15 +438,15 @@ jobs:
           fi
           AUTH_ARGS=(--authfile "${CREDS}/registry-auth")
 
-          sudo podman tag "localhost/${IMAGE}:rechunked-${VERSION}" "${IMAGE_BASE}:${VERSIONED}"
-          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile /tmp/digest.txt "${IMAGE_BASE}:${VERSIONED}"
-          DIGEST=$(cat /tmp/digest.txt)
+          sudo podman tag "${LOCAL_RECHUNKED}" "${IMAGE_BASE}:${VERSIONED}"
+          sudo podman push "${AUTH_ARGS[@]}" "${SIGN_ARGS[@]}" --digestfile "$WORK/digest" "${IMAGE_BASE}:${VERSIONED}"
+          DIGEST=$(cat "$WORK/digest")
           # A push can succeed without attaching a signature; the shipped policy.json
           # then refuses the image, so verify the attachment resolves and validates
           # before anything downstream consumes this digest.
           printf '{"default":[{"type":"reject"}],"transports":{"docker":{"%s":[{"type":"sigstoreSigned","keyPath":"%s","signedIdentity":{"type":"matchRepository"}}]}}}' \
-            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > /tmp/verify-policy.json
-          if ! sudo podman pull -q --signature-policy=/tmp/verify-policy.json "${IMAGE_BASE}@${DIGEST}" >/dev/null; then
+            "${IMAGE_BASE}" "$(pwd)/cosign.pub" > "$WORK/verify-policy.json"
+          if ! sudo podman pull -q --signature-policy="$WORK/verify-policy.json" "${IMAGE_BASE}@${DIGEST}" >/dev/null; then
             echo "::error::signature verification failed for ${IMAGE_BASE}@${DIGEST} — the push did not produce a valid signature"
             exit 1
           fi
@@ -474,13 +497,11 @@ jobs:
         # registry tag too — zot keeps the source of truth.
         if: always() && steps.gate.outputs.build == 'true'
         env:
-          IMAGE: ${{ matrix.variant.image }}
-          VERSION: ${{ matrix.fedora_version }}
           IMAGE_BASE: ${{ steps.push.outputs.image_base }}
           VERSIONED_TAG: ${{ steps.push.outputs.versioned_tag }}
         run: |
-          sudo podman untag "localhost/${IMAGE}:build-${VERSION}" 2>/dev/null || true
-          sudo podman untag "localhost/${IMAGE}:rechunked-${VERSION}" 2>/dev/null || true
+          sudo podman untag "${LOCAL_BUILD}" 2>/dev/null || true
+          sudo podman untag "${LOCAL_RECHUNKED}" 2>/dev/null || true
           if [ -n "${VERSIONED_TAG:-}" ]; then
             sudo podman untag "${IMAGE_BASE}:${VERSIONED_TAG}" 2>/dev/null || true
           fi

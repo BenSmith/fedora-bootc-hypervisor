@@ -24,7 +24,7 @@ fedora-bootc-minimal (built from upstream Fedora bootc manifests)
 - **Pinned releases from Copr.** `hypervisor.Containerfile` pins `ARG WORKLOADCTL_VERSION` and `ARG MOATERY_VERSION` (moatery is the egress inspector, credential broker and DNS responder workloadctl requires). One fetch stage per project downloads the RPM from its Copr project and checks it against the key committed as `copr/<project>.gpg` (`copr/fetch`). The image installs both and caches them at `/usr/share/workloadctl/{workloadctl,moatery}.rpm`, which `workload-ensure-user` puts on a VM's seed ISO. A workloadctl release that needs a newer moatery is refused by the image's own `dnf install`.
 - **Local builds.** `WORKLOADCTL_LOCAL` / `MOATERY_LOCAL` (a checkout or an RPM) on `just build-base-local` replace a fetch stage with a named build context of the stage's name.
 - **Bundle images.** `.forgejo/workflows/build-workload-images.yml` builds the self-built bundles' images with workloadctl's own imagebuild, from the pinned RPM unpacked (never installed) by `.forgejo/scripts/workloadctl-root`, plus this repository's `bundles/` where it has one — a bundle of the same name replaces workloadctl's. Moving the workloadctl pin rebuilds every bundle.
-- **Not yet published.** workloadctl's Copr project and key do not exist yet: until `copr/workloadctl.gpg` is committed, every image build needs `WORKLOADCTL_LOCAL`, and `tests/test_copr_pins.py`'s key check is an expected failure.
+- **Releases.** workloadctl's GitHub releases build into the `benjamin-coder-smith/workloadctl` Copr project through Packit; bumping `WORKLOADCTL_VERSION` to a released version is all the image needs.
 
 ## Common commands
 

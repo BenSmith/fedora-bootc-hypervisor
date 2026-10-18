@@ -49,13 +49,9 @@ class TestTheImageInstallsThePinnedRPMs(unittest.TestCase):
         self.assertIn("--define '_pkgverify_level signature' -K", fetch)
         self.assertIn('install -m 0644 "$1" "$dest"', fetch)
 
-    @unittest.expectedFailure
     def test_every_project_fetched_has_its_key(self):
         """A project with no key fails the fetch, and with it every image
-        build that does not replace the stage. workloadctl's Copr project
-        does not exist yet, so neither does its key: this fails until the
-        key is committed, and then reports an unexpected success to say the
-        expectedFailure can go."""
+        build that does not replace the stage."""
         for project in PROJECTS:
             with self.subTest(project=project):
                 self.assertTrue((COPR / f"{project}.gpg").read_text()

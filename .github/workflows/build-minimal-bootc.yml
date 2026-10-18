@@ -58,7 +58,13 @@ jobs:
   build:
     needs: setup
     if: ${{ github.server_url == 'https://github.com' }}
-    runs-on: ubuntu-26.04
+    # 24.04, not 26.04: fedora-bootc-minimal.Containerfile is a fork of
+    # Fedora's base-images Containerfile written for this runner's podman 4
+    # (see its header). On 26.04 its rpm-ostree compose fails: systemd-sysusers,
+    # run under bwrap, gets "Failed to open /etc/gshadow: Permission denied".
+    # The hypervisor builds need 26.04's podman 5 for bind mounts from an
+    # earlier stage; this Containerfile has none.
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read

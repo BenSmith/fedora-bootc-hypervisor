@@ -8,7 +8,7 @@ tag := `date +%Y%m%d-%H%M`
 # `just` evaluates every variable before running any recipe, the default arm
 # of env_var_or_default() included, so a file it refuses is named on stderr
 # and leaves the value empty rather than taking down recipes that never use
-# it (`test`, everything delegating into workloadctl/).
+# it (`test`).
 fedora_version := env_var_or_default('FEDORA_VERSION', `sh fedora-versions.sh stable || true`)
 # Pinned rechunker image tag, same source of truth the CI workflows read.
 rechunker := env_var_or_default('RECHUNKER', `sh fedora-versions.sh rechunker || true`)
@@ -161,21 +161,36 @@ build-base: sync-cosy
     -t ghcr.io/bensmith/hypervisor-bootc:latest \
     -f hypervisor.Containerfile .
 
-# MOATERY_LOCAL=PATH puts a local moatery in the image in place of the Copr
-# release hypervisor.Containerfile pins: PATH is a moatery checkout, whose
-# `just rpm-image` builds and tests the RPM in a container, or an RPM. An
-# environment variable, not a parameter, so it reaches this recipe through
+# WORKLOADCTL_LOCAL=PATH and MOATERY_LOCAL=PATH put a local build in the
+# image in place of the Copr release hypervisor.Containerfile pins. PATH is
+# an RPM, or a checkout: workloadctl's `just rpm-build` builds its RPM here,
+# moatery's `just rpm-image` builds and tests its RPM in a container.
+# Environment variables, not parameters, so they reach this recipe through
 # build-all-local and aio-local.
 build-base-local: sync-cosy
   #!/usr/bin/env bash
   set -euo pipefail
   cp policy-local.json policy.json
-  # A named build context called moatery stands in for the Containerfile's
-  # moatery stage, which then is not built.
-  moatery=()
+  # A named build context called as a fetch stage stands in for it, and the
+  # stage then is not built.
+  contexts=()
+  local=$(mktemp -d)
+  trap 'rm -rf "$local"' EXIT
+  if [ -n "${WORKLOADCTL_LOCAL:-}" ]; then
+    context="$local/workloadctl"
+    mkdir "$context"
+    if [ -d "$WORKLOADCTL_LOCAL" ]; then
+      built=$(cd "$WORKLOADCTL_LOCAL" && just rpm-build | tail -n 1)
+      cp "$WORKLOADCTL_LOCAL/$built" "$context/workloadctl.rpm"
+    else
+      cp "$WORKLOADCTL_LOCAL" "$context/workloadctl.rpm"
+    fi
+    echo "workloadctl from $WORKLOADCTL_LOCAL: $(rpm -qp "$context/workloadctl.rpm")"
+    contexts+=(--build-context "workloadctl=$context")
+  fi
   if [ -n "${MOATERY_LOCAL:-}" ]; then
-    context=$(mktemp -d)
-    trap 'rm -rf "$context"' EXIT
+    context="$local/moatery"
+    mkdir "$context"
     if [ -d "$MOATERY_LOCAL" ]; then
       (cd "$MOATERY_LOCAL" && just rpm-image)
       image="localhost/moatery-rpm:$(cat "$MOATERY_LOCAL/VERSION")"
@@ -186,7 +201,7 @@ build-base-local: sync-cosy
       cp "$MOATERY_LOCAL" "$context/moatery.rpm"
     fi
     echo "moatery from $MOATERY_LOCAL: $(rpm -qp "$context/moatery.rpm")"
-    moatery=(--build-context "moatery=$context")
+    contexts+=(--build-context "moatery=$context")
   fi
   # BASE_IMAGE, not --from: --from overrides the build's FIRST stage, which
   # is not the base, so it swaps an early stage for the bootc minimal and
@@ -194,7 +209,7 @@ build-base-local: sync-cosy
   # build-base uses, pointed at the local minimal.
   http_proxy={{proxy}} https_proxy={{proxy}} \
   podman build \
-    "${moatery[@]}" \
+    "${contexts[@]}" \
     --network=host \
     --build-arg BASE_IMAGE=localhost/fedora-bootc-minimal:{{fedora_version}} \
     --build-arg FEDORA_VERSION={{fedora_version}} \
@@ -576,46 +591,6 @@ aio-local vmname="hypervisor-test" memory="4096" vcpus="2" rootfs="xfs" size="20
 
 # === Tests ==================================================================
 
-# the image's own checks, then workloadctl's suite
-test: test-image
-  cd workloadctl && just test
-
 # what the Containerfiles, build scripts and workflows hold (tests/)
-test-image:
+test:
   python3 -B -m unittest discover -t . -s tests -p 'test_*.py'
-
-test-unit:
-  cd workloadctl && just test-unit
-
-test-integration:
-  cd workloadctl && just test-integration
-
-# Run CLI-surface acceptance harness (all verbs, both substrates)
-test-cli target:
-  cd workloadctl && just test-cli {{target}}
-
-# CLI surface — container substrate only (no VM boot; much faster)
-test-cli-containers target:
-  cd workloadctl && just test-cli-containers {{target}}
-
-# CLI surface — VM substrate only (requires /dev/kvm on target)
-test-cli-vm target:
-  cd workloadctl && just test-cli-vm {{target}}
-
-# CLI surface — deploy current tree to target first, then run all tests
-test-cli-deploy target:
-  cd workloadctl && just test-cli-deploy {{target}}
-
-# Full KVM-host verification sweep — CLI surface + runtime rung (dev + gate).
-# Run ON a KVM host (boots QEMU locally); target defaults to `local`.
-test-all-runtime target="local":
-  cd workloadctl && just test-all-runtime {{target}}
-
-# As above, driven from your laptop against a REMOTE prepared KVM host (e.g. your dev host):
-# rsync the tree over, run the sweep there, stream output back.
-test-all-runtime-remote host target="local":
-  cd workloadctl && just test-all-runtime-remote {{host}} {{target}}
-
-# Build workloadctl RPM
-workload-rpm:
-  cd workloadctl && just rpm-build

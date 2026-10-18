@@ -1,40 +1,29 @@
 ARG BASE_IMAGE=ghcr.io/bensmith/fedora-bootc-minimal:latest
-# The rpm-builder's base: the SAME Fedora the target image is built from
-# (fedora-versions.yml), so the `just test` gate in this stage validates
-# against the Python the RPM will actually run on. fedora:latest would drift
-# ahead on every release and gate the code against a different interpreter.
-# Every caller passes it explicitly (justfile + CI workflows); the default
-# tracks current stable.
+# The fetch stages' base: the Fedora the image is built from
+# (fedora-versions.yml). Every caller passes it explicitly (justfile + CI
+# workflows); the default tracks current stable.
 ARG FEDORA_VERSION=44
-# moatery's RPM, from its Copr repository, signature checked against the
-# project's key (moatery-copr/fetch). workloadctl requires it: the unit suite
-# below imports it, and the final image installs it and caches it for VM seed
-# ISOs. Bump with the spec's `Requires: moatery >=`. `just build-base-local`
-# with MOATERY_LOCAL replaces the stage with a named build context, moatery,
-# holding a local build's RPM as /moatery.rpm.
+# workloadctl's RPM and moatery's, which it requires, each from its Copr
+# project, signature checked against the project's key (copr/fetch). The
+# image installs both and caches both for VM seed ISOs. A workloadctl release
+# that needs a newer moatery than this pins is refused by the image's
+# `dnf install`. `just build-base-local` with WORKLOADCTL_LOCAL or
+# MOATERY_LOCAL replaces a stage with a named build context of the stage's
+# name, holding a local build's RPM as /workloadctl.rpm or /moatery.rpm.
+ARG WORKLOADCTL_VERSION=0.2.0
 ARG MOATERY_VERSION=0.9.0
+
+FROM fedora:${FEDORA_VERSION} AS workloadctl
+ARG WORKLOADCTL_VERSION
+COPY copr/ /tmp/copr/
+RUN /tmp/copr/fetch workloadctl "${WORKLOADCTL_VERSION}" /workloadctl.rpm && \
+    rm -rf /tmp/copr
 
 FROM fedora:${FEDORA_VERSION} AS moatery
 ARG MOATERY_VERSION
-COPY moatery-copr/ /tmp/moatery-copr/
-RUN /tmp/moatery-copr/fetch "${MOATERY_VERSION}" /moatery.rpm && \
-    rm -rf /tmp/moatery-copr
-
-FROM fedora:${FEDORA_VERSION} AS rpm-builder
-COPY workloadctl/ /workloadctl/
-COPY --from=moatery /moatery.rpm /tmp/moatery.rpm
-# openssl is the CLI, not the library: the test suite mints a CA and its leaves
-# by shelling out to it (tests/test_ca.py among them),
-# and the fedora base image ships openssl-libs without it. Absent, `just test`
-# fails here with FileNotFoundError rather than in the PR gate, whose runner
-# happens to have it.
-RUN dnf install -y --nodocs --setopt=install_weak_deps=False \
-        rpm-build python3 just systemd-rpm-macros python3-rpm-macros openssl \
-        /tmp/moatery.rpm && \
-    dnf clean all && \
-    cd /workloadctl && \
-    rm -rf rpmbuild && \
-    just test && just rpm-build
+COPY copr/ /tmp/copr/
+RUN /tmp/copr/fetch moatery "${MOATERY_VERSION}" /moatery.rpm && \
+    rm -rf /tmp/copr
 
 FROM ${BASE_IMAGE}
 
@@ -422,29 +411,16 @@ RUN if [ "$ENABLE_PASSWORDLESS_SUDO" = "true" ]; then \
         chmod 0440 /etc/sudoers.d/wheel-nopasswd; \
     fi
 
-# Install workload provisioning system, built from source in the rpm-builder
-# stage, and moatery, which it requires. Both RPMs are also cached at a known
-# path so workload-ensure-user can bundle them into VM cloud-init ISOs at
-# runtime.
-COPY --from=rpm-builder /workloadctl/rpmbuild/RPMS/noarch/ /tmp/wl-rpms/
+# Install workload provisioning system and moatery, which it requires. Both
+# RPMs are also cached at a known path so workload-ensure-user can bundle them
+# into VM cloud-init ISOs at runtime.
+COPY --from=workloadctl /workloadctl.rpm /tmp/workloadctl.rpm
 COPY --from=moatery /moatery.rpm /tmp/moatery.rpm
-# Exactly one RPM, asserted out loud. The release is timestamped, so the only way
-# to name it is a glob — and a glob that matches several expands to a list that
-# `dnf install` would happily take, silently installing whichever came last and
-# caching the wrong one at /usr/share/workloadctl. A glob matching none expands
-# to itself. Both are build-stopping, so say which happened: the failure lands
-# hundreds of layers deep and reads as unexplained if it doesn't.
 RUN /usr/libexec/hypervisor-build/selinux-store-copyup && \
-    set -- /tmp/wl-rpms/workloadctl-*.rpm && \
-    if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then \
-        echo "expected exactly one workloadctl RPM in /tmp/wl-rpms, got $#:" >&2; \
-        ls -l /tmp/wl-rpms >&2; \
-        exit 1; \
-    fi && \
-    dnf install -y "$1" /tmp/moatery.rpm && \
-    install -Dpm 0644 "$1" /usr/share/workloadctl/workloadctl.rpm && \
+    dnf install -y /tmp/workloadctl.rpm /tmp/moatery.rpm && \
+    install -Dpm 0644 /tmp/workloadctl.rpm /usr/share/workloadctl/workloadctl.rpm && \
     install -Dpm 0644 /tmp/moatery.rpm /usr/share/workloadctl/moatery.rpm && \
-    rm -rf /tmp/wl-rpms /tmp/moatery.rpm && \
+    rm -f /tmp/workloadctl.rpm /tmp/moatery.rpm && \
     dnf clean all
 
 # The tinyproxy sysusers fragment is gone, and its absence has a reason.

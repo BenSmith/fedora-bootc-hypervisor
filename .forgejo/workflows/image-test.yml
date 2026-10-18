@@ -20,4 +20,4 @@ jobs:
           done
 
       - name: Image tests
-        run: just test-image
+        run: just test

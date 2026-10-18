@@ -23,7 +23,7 @@ fedora-bootc-minimal (built from upstream Fedora bootc manifests)
 
 - **Pinned releases from Copr.** `hypervisor.Containerfile` pins `ARG WORKLOADCTL_VERSION` and `ARG MOATERY_VERSION` (moatery is the egress inspector, credential broker and DNS responder workloadctl requires). One fetch stage per project downloads the RPM from its Copr project and checks it against the key committed as `copr/<project>.gpg` (`copr/fetch`). The image installs both and caches them at `/usr/share/workloadctl/{workloadctl,moatery}.rpm`, which `workload-ensure-user` puts on a VM's seed ISO. A workloadctl release that needs a newer moatery is refused by the image's own `dnf install`.
 - **Local builds.** `WORKLOADCTL_LOCAL` / `MOATERY_LOCAL` (a checkout or an RPM) on `just build-base-local` replace a fetch stage with a named build context of the stage's name.
-- **Bundle images.** `.forgejo/workflows/build-workload-images.yml` builds the self-built bundles' images with workloadctl's own imagebuild, from the pinned RPM unpacked (never installed) by `.forgejo/scripts/workloadctl-root`, plus this repository's `bundles/` where it has one — a bundle of the same name replaces workloadctl's. Moving the workloadctl pin rebuilds every bundle.
+- **Bundle images.** The self-built bundles' images (`registry.local/workloads/<name>`) are workloadctl's: its repository builds, scans and signs them on this forge's runner, with the key this repository's `seal-signing-key.yml` seals (`docs/ci-image-signing.md`).
 - **Releases.** workloadctl's GitHub releases build into the `benjamin-coder-smith/workloadctl` Copr project through Packit; bumping `WORKLOADCTL_VERSION` to a released version is all the image needs.
 
 ## Common commands
@@ -51,7 +51,6 @@ A citation has to be followable from a clean checkout: don't cite a doc you inte
 GitHub Actions (`.github/workflows/`) and a mirrored Forgejo runner (`.forgejo/workflows/`) build images daily: minimal first, then every hypervisor variant on it (07:00 UTC, midnight Pacific daylight time; GitHub chains the hypervisor build to the minimal one, Forgejo schedules it at 09:00 UTC). Note (from project memory): Forgejo itself runs in a container, so container-in-container CI builds don't work there — VM workloads exist partly to provide a native build host for that.
 
 - `image-test.yml` (both forges) — **PR gate**: `just test`.
-- `build-workload-images.yml` / `scan-images.yml` (Forgejo only) — the bundle images, built, signed and scanned from the pinned workloadctl RPM (above).
 - `runtime-gate.yml` (Forgejo only) — **cadence gate**: the published image turned into a qcow2 by bootc-image-builder and booted under KVM with a swtpm vTPM, with workloadctl's runtime checks run against it, checked out at the release the image pins (`v<WORKLOADCTL_VERSION>`; workloadctl's main until that tag exists). Weekly (Tue 11:00 UTC) and on dispatch.
 
 workloadctl's own test workflows, its dev runtime rung included, are its repository's.

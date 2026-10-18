@@ -64,7 +64,7 @@ sudo workloadctl create webserver \
 
 ### desktop-containers/ is operator-run by design
 
-The four contexts under `desktop-containers/` (labwc/wayfire × kms/nested) are **build contexts shipped as source, not images this project publishes**. The image `COPY`s the directory to `/usr/share/cosy/desktop-containers/`; an operator builds one on the host with its `build.sh` when they want a desktop, and `cosy` runs it. That is why there is no justfile recipe, no workflow and no test for them: `build-workload-images.yml` and the `.forgejo/scripts/ci-workload-images.py` matrix cover the images that *are* published, and these are deliberately outside it. Building them in CI would produce artifacts nothing consumes — the operator builds locally either way, since a KMS desktop is bound to the machine it runs on.
+The four contexts under `desktop-containers/` (labwc/wayfire × kms/nested) are **build contexts shipped as source, not images this project publishes**. The image `COPY`s the directory to `/usr/share/cosy/desktop-containers/`; an operator builds one on the host with its `build.sh` when they want a desktop, and `cosy` runs it. That is why there is no justfile recipe, no workflow and no test for them: the images that *are* published here are the OS images, and the bundle images are workloadctl's; these are deliberately outside both. Building them in CI would produce artifacts nothing consumes — the operator builds locally either way, since a KMS desktop is bound to the machine it runs on.
 
 Two consequences worth knowing. A broken Containerfile here is discovered at the keyboard, not in CI, so treat edits under this directory as untested until someone runs `build.sh`. And the KMS variants need two SELinux booleans turned on first (`seatd_container_connect`, `container_input_devices`) — the image grants no device access host-wide; see each variant's `README.md`.
 
@@ -135,13 +135,10 @@ docs/
 .github/workflows/                        build-minimal-bootc.yml (daily), build-hypervisor.yml (on its completion),
                                           image-test.yml (PR gate)
 .forgejo/workflows/                       Mirrors of the above (minimal daily 07:00 UTC, hypervisor 09:00) plus Forgejo-only:
-                                          seal-signing-key.yml, build-workload-images.yml, scan-images.yml,
-                                          runtime-gate.yml (weekly Tue; the image under workloadctl's runtime
-                                          checks), build-hypervisor-f44-quick.yml. No drift check between the
-                                          forges.
-.forgejo/scripts/ci-workload-images.py    Builds workload images via workloadctl's own imagebuild, from the pinned
-                                          RPM unpacked by workloadctl-root (plus bundles/, where there is one);
-                                          `list` feeds the CI matrix
+                                          seal-signing-key.yml, runtime-gate.yml (weekly Tue; the image under
+                                          workloadctl's runtime checks), build-hypervisor-f44-quick.yml. No
+                                          drift check between the forges. The bundle images are workloadctl's
+                                          repository's to build, with the key seal-signing-key.yml seals.
 
 justfile                                  Build automation (see Build System below)
 ```

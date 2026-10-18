@@ -5,10 +5,15 @@ ways, and only one of them can use a forge secret at build time. This is the
 reference for the Forgejo path, which is the unusual one.
 
 Cited from `.forgejo/workflows/seal-signing-key.yml`,
-`.forgejo/workflows/seal-registry-auth.yml`, the five Forgejo
+`.forgejo/workflows/seal-registry-auth.yml`, the four Forgejo
 workflows that sign (`build-hypervisor.yml`, `build-hypervisor-f44-quick.yml`,
-`build-minimal-bootc.yml`, `build-workload-images.yml`,
-`publish-negativo-rpms.yml`), and `CLAUDE.md`.
+`build-minimal-bootc.yml`, `publish-negativo-rpms.yml`), and `CLAUDE.md`.
+
+The bundle images are signed on the same runner with the same sealed key, by
+workloadctl's `build-workload-images.yml`
+(https://github.com/BenSmith/workloadctl/blob/main/.forgejo/workflows/build-workload-images.yml),
+which verifies each push against its own copy of `cosign.pub`
+(`.forgejo/cosign.pub` there). A new key changes both copies.
 
 ## The two schemes
 

@@ -136,7 +136,9 @@ docs/
                                           image-test.yml (PR gate)
 .forgejo/workflows/                       Mirrors of the above (minimal Sun, hypervisor Mon) plus Forgejo-only:
                                           seal-signing-key.yml, build-workload-images.yml, scan-images.yml,
-                                          build-hypervisor-f44-quick.yml. No drift check between the forges.
+                                          runtime-gate.yml (weekly Tue; the image under workloadctl's runtime
+                                          checks), build-hypervisor-f44-quick.yml. No drift check between the
+                                          forges.
 .forgejo/scripts/ci-workload-images.py    Builds workload images via workloadctl's own imagebuild, from the pinned
                                           RPM unpacked by workloadctl-root (plus bundles/, where there is one);
                                           `list` feeds the CI matrix

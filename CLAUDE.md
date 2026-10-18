@@ -52,8 +52,9 @@ GitHub Actions (`.github/workflows/`) and a mirrored Forgejo runner (`.forgejo/w
 
 - `image-test.yml` (both forges) — **PR gate**: `just test`.
 - `build-workload-images.yml` / `scan-images.yml` (Forgejo only) — the bundle images, built, signed and scanned from the pinned workloadctl RPM (above).
+- `runtime-gate.yml` (Forgejo only) — **cadence gate**: the published image turned into a qcow2 by bootc-image-builder and booted under KVM with a swtpm vTPM, with workloadctl's runtime checks run against it, checked out at the release the image pins (`v<WORKLOADCTL_VERSION>`; workloadctl's main until that tag exists). Weekly (Tue 04:00) and on dispatch.
 
-workloadctl's own test workflows are its repository's.
+workloadctl's own test workflows, its dev runtime rung included, are its repository's.
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands

@@ -33,7 +33,7 @@ concurrency:
 jobs:
   setup:
     if: ${{ github.server_url == 'https://github.com' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       versions: ${{ steps.r.outputs.versions }}
       stable: ${{ steps.r.outputs.stable }}
@@ -59,7 +59,7 @@ jobs:
     # Skip if upstream minimal build failed; allow all other triggers.
     # Also skip entirely under Forgejo (handled by .forgejo/workflows/).
     if: ${{ github.server_url == 'https://github.com' && (github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 120
     permissions:
       contents: read
@@ -234,7 +234,7 @@ jobs:
   build-variant:
     needs: [setup, build-base]
     if: ${{ github.server_url == 'https://github.com' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 120
     permissions:
       contents: read

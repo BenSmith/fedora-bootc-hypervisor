@@ -31,7 +31,7 @@ env:
 jobs:
   setup:
     if: ${{ github.server_url == 'https://github.com' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       versions: ${{ steps.r.outputs.versions }}
       stable: ${{ steps.r.outputs.stable }}
@@ -55,7 +55,7 @@ jobs:
   build:
     needs: setup
     if: ${{ github.server_url == 'https://github.com' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     permissions:
       contents: read

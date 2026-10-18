@@ -9,8 +9,11 @@ on:
         default: ''
         type: string
 
+  # Daily at 07:00 UTC, midnight Pacific daylight time: the hypervisor images
+  # follow it (build-hypervisor.yml runs when it completes), so each day's
+  # Fedora updates reach them.
   schedule:
-    - cron: '0 2 * * 6'
+    - cron: '0 7 * * *'
 
   push:
     branches: [main]

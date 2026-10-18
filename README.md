@@ -243,7 +243,7 @@ WORKLOADCTL_LOCAL=../workloadctl just build-base-local
 just push-all
 ```
 
-Weekly automated builds via GitHub Actions: `fedora-bootc-minimal` on Saturdays, all hypervisor variants on Sundays.
+Daily automated builds on both forges: `fedora-bootc-minimal`, then every hypervisor variant on it.
 
 ## Design
 

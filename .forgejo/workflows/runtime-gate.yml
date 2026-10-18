@@ -29,9 +29,9 @@ name: runtime-gate
 on:
   workflow_dispatch:
   schedule:
-    # Weekly, Tuesday 04:00 UTC — after the Sat/Sun image builds, so the image
-    # it boots is freshly built.
-    - cron: '0 4 * * 2'
+    # Weekly, Tuesday 11:00 UTC — after that day's image builds (07:00 minimal,
+    # 09:00 hypervisor), so the image it boots is freshly built.
+    - cron: '0 11 * * 2'
 
 jobs:
   runtime-gate:

@@ -132,9 +132,9 @@ docs/
   cosign-local-redirect-loop.md           Why CI signs via containers/image instead of the cosign CLI
   ideas.md                                Scratch list, not a plan of record
 
-.github/workflows/                        build-minimal-bootc.yml (weekly Sat), build-hypervisor.yml (weekly Sun),
+.github/workflows/                        build-minimal-bootc.yml (daily), build-hypervisor.yml (on its completion),
                                           image-test.yml (PR gate)
-.forgejo/workflows/                       Mirrors of the above (minimal Sun, hypervisor Mon) plus Forgejo-only:
+.forgejo/workflows/                       Mirrors of the above (minimal daily 07:00 UTC, hypervisor 09:00) plus Forgejo-only:
                                           seal-signing-key.yml, build-workload-images.yml, scan-images.yml,
                                           runtime-gate.yml (weekly Tue; the image under workloadctl's runtime
                                           checks), build-hypervisor-f44-quick.yml. No drift check between the

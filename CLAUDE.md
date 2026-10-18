@@ -48,11 +48,11 @@ A citation has to be followable from a clean checkout: don't cite a doc you inte
 
 ## CI
 
-GitHub Actions (`.github/workflows/`) and a mirrored Forgejo runner (`.forgejo/workflows/`) build images on a weekly cadence (minimal Sat, variants Sun). Note (from project memory): Forgejo itself runs in a container, so container-in-container CI builds don't work there — VM workloads exist partly to provide a native build host for that.
+GitHub Actions (`.github/workflows/`) and a mirrored Forgejo runner (`.forgejo/workflows/`) build images daily: minimal first, then every hypervisor variant on it (07:00 UTC, midnight Pacific daylight time; GitHub chains the hypervisor build to the minimal one, Forgejo schedules it at 09:00 UTC). Note (from project memory): Forgejo itself runs in a container, so container-in-container CI builds don't work there — VM workloads exist partly to provide a native build host for that.
 
 - `image-test.yml` (both forges) — **PR gate**: `just test`.
 - `build-workload-images.yml` / `scan-images.yml` (Forgejo only) — the bundle images, built, signed and scanned from the pinned workloadctl RPM (above).
-- `runtime-gate.yml` (Forgejo only) — **cadence gate**: the published image turned into a qcow2 by bootc-image-builder and booted under KVM with a swtpm vTPM, with workloadctl's runtime checks run against it, checked out at the release the image pins (`v<WORKLOADCTL_VERSION>`; workloadctl's main until that tag exists). Weekly (Tue 04:00) and on dispatch.
+- `runtime-gate.yml` (Forgejo only) — **cadence gate**: the published image turned into a qcow2 by bootc-image-builder and booted under KVM with a swtpm vTPM, with workloadctl's runtime checks run against it, checked out at the release the image pins (`v<WORKLOADCTL_VERSION>`; workloadctl's main until that tag exists). Weekly (Tue 11:00 UTC) and on dispatch.
 
 workloadctl's own test workflows, its dev runtime rung included, are its repository's.
 

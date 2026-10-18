@@ -14,7 +14,10 @@ on:
         default: 'https://forge.local/ben/fedora-bootc-base-images.git'
         type: string
 
-  # Run manually via workflow_dispatch for now.
+  # Daily at 07:00 UTC, midnight Pacific daylight time; build-hypervisor.yml
+  # runs two hours later on it.
+  schedule:
+    - cron: '0 7 * * *'
 
 concurrency:
   group: build-minimal-bootc-${{ github.ref }}

@@ -14,9 +14,10 @@ on:
         required: true
         default: 'all'
         type: string
-  # Daily, after the weekend image builds (03:00) have pushed.
+  # Daily at 12:00 UTC, after the day's image builds (07:00 minimal, 09:00
+  # hypervisor) have pushed.
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '0 12 * * *'
 
 concurrency:
   group: scan-images

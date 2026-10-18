@@ -83,16 +83,29 @@ jobs:
           sha256sum -c cosy.sha256
 
       - name: Inject homelab CA trust
+        # Bake the shared homelab root CA (public cert) into the image trust
+        # store so every host built from the homelab images trusts all *.local
+        # Caddy services. The private key is never here, and the public GitHub
+        # pipeline never runs this step.
+        #
+        # An unset secret fails the build instead of skipping the anchor. Every
+        # image this workflow publishes is for homelab hosts, and a host that
+        # upgrades to one without the CA loses the anchor and the registry.local
+        # mirror from its /etc at the reboot, after which it cannot verify
+        # registry.local to pull the image that would put them back.
         env:
           HOMELAB_ROOT_CA: ${{ secrets.HOMELAB_ROOT_CA }}
         run: |
-          if [ -n "$HOMELAB_ROOT_CA" ]; then
-            printf '%s\n' "$HOMELAB_ROOT_CA" > ca-trust-inject/homelab-root.crt
-            openssl x509 -in ca-trust-inject/homelab-root.crt -noout -subject \
-              && echo "Injected homelab root CA into build context"
-          else
-            echo "HOMELAB_ROOT_CA secret not set; building without injected anchors"
+          if [ -z "$HOMELAB_ROOT_CA" ]; then
+            echo "::error::HOMELAB_ROOT_CA is not set — refusing to build a homelab image without the homelab root CA. Set the secret (the CA's public PEM) on this repository or your user, then re-run this build."
+            exit 1
           fi
+          printf '%s\n' "$HOMELAB_ROOT_CA" > ca-trust-inject/homelab-root.crt
+          if ! openssl x509 -in ca-trust-inject/homelab-root.crt -noout -subject; then
+            echo "::error::HOMELAB_ROOT_CA is not a PEM certificate"
+            exit 1
+          fi
+          echo "Injected homelab root CA into build context"
 
       - name: Build base hypervisor
         run: |

@@ -13,7 +13,10 @@ source*:
   `.forgejo/workflows/build-hypervisor.yml` and its `-f44-quick` variant).
   The homelab images then trust
   the shared homelab CA out of the box — every `*.local` service fronted by Caddy
-  validates with no per-host import.
+  validates with no per-host import. With the secret unset that step fails the
+  build: a host that upgraded to a homelab image without the CA would lose the
+  anchor and the mirror from its `/etc` at the reboot, and with them the
+  verified route to `registry.local` it needs for the next image.
 - The **GitHub** pipeline does not set the secret, so the public ghcr image
   ships no extra anchors.
 

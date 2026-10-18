@@ -15,7 +15,7 @@ jobs:
 
       - name: Ensure tooling
         run: |
-          for bin in just python3; do
+          for bin in just openssl python3; do
             command -v "$bin" >/dev/null || sudo dnf install -y "$bin"
           done
 

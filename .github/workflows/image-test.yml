@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Tooling
-        run: dnf install -y git just python3
+        run: dnf install -y git just openssl python3
 
       - name: Checkout repository
         uses: actions/checkout@v7

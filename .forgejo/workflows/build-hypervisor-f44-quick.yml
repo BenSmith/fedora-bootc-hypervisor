@@ -111,7 +111,7 @@ jobs:
             "localhost/hypervisor-bootc:build-${VERSION}" \
             "localhost/hypervisor-bootc:rechunked-${VERSION}"
 
-      - name: Scan for fixable critical vulnerabilities (report only)
+      - name: Check for missing security updates (report only)
         run: bash .forgejo/scripts/ci-os-scan.sh "localhost/hypervisor-bootc:rechunked-${VERSION}"
 
       - name: Tag and push base
@@ -262,7 +262,7 @@ jobs:
             "localhost/${IMAGE}:build-${VERSION}" \
             "localhost/${IMAGE}:rechunked-${VERSION}"
 
-      - name: Scan for fixable critical vulnerabilities (report only)
+      - name: Check for missing security updates (report only)
         env:
           IMAGE: ${{ matrix.variant.image }}
         run: bash .forgejo/scripts/ci-os-scan.sh "localhost/${IMAGE}:rechunked-${VERSION}"

@@ -157,7 +157,7 @@ jobs:
             "localhost/hypervisor-bootc:build-${VERSION}" \
             "localhost/hypervisor-bootc:rechunked-${VERSION}"
 
-      - name: Scan for fixable critical vulnerabilities (report only)
+      - name: Check for missing security updates (report only)
         env:
           VERSION: ${{ matrix.fedora_version }}
         run: bash .forgejo/scripts/ci-os-scan.sh "localhost/hypervisor-bootc:rechunked-${VERSION}"
@@ -376,7 +376,7 @@ jobs:
             "localhost/${IMAGE}:build-${VERSION}" \
             "localhost/${IMAGE}:rechunked-${VERSION}"
 
-      - name: Scan for fixable critical vulnerabilities (report only)
+      - name: Check for missing security updates (report only)
         if: steps.gate.outputs.build == 'true'
         env:
           IMAGE: ${{ matrix.variant.image }}

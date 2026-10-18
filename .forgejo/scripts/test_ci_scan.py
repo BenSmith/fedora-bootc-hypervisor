@@ -133,8 +133,9 @@ class Workflow(unittest.TestCase):
         self.assertIn("python3 .forgejo/scripts/test_ci_scan.py", self.text)
 
 class OsImages(unittest.TestCase):
-    """Each OS image is scanned, report only, after its rechunk and before
-    its push, so a fresh advisory cannot hold the hosts' updates."""
+    """Each OS image is checked for security updates it lacks, report only,
+    after its rechunk and before its push, so a fresh advisory cannot hold
+    the hosts' updates."""
 
     JOBS = {"build-hypervisor.yml": 2, "build-hypervisor-f44-quick.yml": 2,
             "build-minimal-bootc.yml": 1}
@@ -145,7 +146,7 @@ class OsImages(unittest.TestCase):
             steps = text.split("\n      - name: ")
             names = [st.split("\n", 1)[0] for st in steps]
             scans = [i for i, n in enumerate(names)
-                     if n.startswith("Scan for fixable")]
+                     if n.startswith("Check for missing security")]
             self.assertEqual(len(scans), jobs, name)
             for i in scans:
                 self.assertTrue(names[i - 1].startswith("Rechunk"), name)
@@ -161,8 +162,21 @@ class OsImages(unittest.TestCase):
     def test_the_os_scan_never_fails_the_job(self):
         text = (HERE / "ci-os-scan.sh").read_text()
         self.assertNotIn("exit 1", text)
-        self.assertIn("ci-scan.py\" report", text)
         self.assertRegex(text, r"(?m)^exit 0$")
+
+    def test_the_os_scan_asks_fedora_not_a_scanner(self):
+        # Everything in an OS image is a Fedora package: grype's matches in
+        # podman's vendored Go modules and the kernel's NVD entries were
+        # 113 findings on 2026-10-17, none of which a rebuild could change.
+        text = (HERE / "ci-os-scan.sh").read_text()
+        self.assertIn("dnf -q check-upgrade --security", text)
+        self.assertNotIn("grype", text)
+
+    def test_a_check_that_did_not_run_is_not_read_as_clean(self):
+        # dnf exits 1 when it cannot reach the repos: only 0 is clean.
+        text = (HERE / "ci-os-scan.sh").read_text()
+        self.assertRegex(text, r"\n  0\)\n\s*echo \"\$\{ref\}: no missing")
+        self.assertRegex(text, r"\n  \*\)\n(?:[^\n]*\n)*?\s*echo \"::warning::could not check")
 
 
 class Runners(unittest.TestCase):

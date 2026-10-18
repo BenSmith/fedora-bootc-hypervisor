@@ -10,9 +10,9 @@ A scan that errored, or wrote no `matches`, is a failure, never a pass with
 nothing found: a scanner that cannot read an image reports the same nothing
 as a clean one (audit F26 read failed scans as 0 for weeks).
 
-`report` says the same things as warnings and always exits 0: the OS images
-(ci-os-scan.sh), whose push a scan does not hold, and the daily scan of every
-image the bundles run (scan-images.yml), which nothing waits on.
+`report` says the same things as warnings and always exits 0: the daily
+scan of every image the bundles run (scan-images.yml), which nothing waits
+on.
 
 The allowlist has one accepted vulnerability per line: its id, an image
 pattern (fnmatch, `*` for any), and the reason. `#` starts a comment.

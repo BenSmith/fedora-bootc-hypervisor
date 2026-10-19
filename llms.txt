@@ -139,6 +139,8 @@ docs/
                                           workloadctl's runtime checks), build-hypervisor-f44-quick.yml. No
                                           drift check between the forges. The bundle images are workloadctl's
                                           repository's to build, with the key seal-signing-key.yml seals.
+                                          Their base builds also install the RPMs in registry.local/homelab-rpms
+                                          (hypervisor.Containerfile's HOMELAB_RPMS), signature checked first.
 
 justfile                                  Build automation (see Build System below)
 ```

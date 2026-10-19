@@ -147,9 +147,22 @@ jobs:
           fi
           echo "Injected homelab root CA into build context"
 
+      # The homelab's packages come from a signed image of RPMs, published by
+      # a homelab repository (hypervisor.Containerfile, HOMELAB_RPMS). Absent
+      # or unsigned fails the job, as an unset CA does: a host that upgrades
+      # to an image without them loses what they installed.
+      - name: Resolve homelab packages
+        id: homelab
+        run: |
+          # An assignment, so the script's failure fails the step; inside an
+          # echo's argument it would not.
+          ref=$(bash .forgejo/scripts/verified-ref.sh "${REGISTRY}/homelab-rpms:latest")
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
       - name: Build base hypervisor
         env:
           VERSION: ${{ matrix.fedora_version }}
+          HOMELAB_RPMS: ${{ steps.homelab.outputs.ref }}
         run: |
           sudo podman build \
             --pull=newer \
@@ -160,6 +173,7 @@ jobs:
             --network=host \
             --build-arg BASE_IMAGE=${REGISTRY}/fedora-bootc-minimal:${VERSION} \
             --build-arg FEDORA_VERSION=${VERSION} \
+            --build-arg HOMELAB_RPMS=${HOMELAB_RPMS} \
             -f hypervisor.Containerfile \
             -t "${LOCAL_BUILD}" \
             .

@@ -12,6 +12,15 @@ ARG FEDORA_VERSION=44
 # name, holding a local build's RPMs where the stage leaves them.
 ARG WORKLOADCTL_VERSION=0.2.1
 ARG MOATERY_VERSION=0.9.0
+# Packages the homelab adds to its images: an image holding RPMs under /rpms,
+# registry.local/homelab-rpms, published by a homelab repository. The Forgejo
+# builds pass its verified digest; every other build installs none.
+ARG HOMELAB_RPMS=homelab-rpms-none
+
+FROM scratch AS homelab-rpms-none
+COPY ca-trust-inject/README.md /none
+
+FROM ${HOMELAB_RPMS} AS homelab-rpms
 
 FROM fedora:${FEDORA_VERSION} AS workloadctl
 ARG WORKLOADCTL_VERSION
@@ -422,6 +431,20 @@ RUN /usr/libexec/hypervisor-build/selinux-store-copyup && \
     dnf install -y /tmp/workloadctl.rpm /tmp/workloadctl-vm.rpm /tmp/moatery.rpm && \
     rm -f /tmp/workloadctl.rpm /tmp/workloadctl-vm.rpm /tmp/moatery.rpm && \
     dnf clean all
+
+# The homelab's packages (HOMELAB_RPMS), after workloadctl: they may extend it.
+# An image passed in that holds no RPMs fails, rather than build without them.
+# COPY, not a RUN bind mount: the layer cache keys a COPY on what it copies,
+# and a bind mount's content not at all, so a cached install would outlive a
+# new HOMELAB_RPMS.
+COPY --from=homelab-rpms / /tmp/homelab-rpms/
+RUN if [ ! -e /tmp/homelab-rpms/none ]; then \
+        set -- /tmp/homelab-rpms/rpms/*.rpm && \
+        { [ -e "$1" ] || { echo "HOMELAB_RPMS holds no /rpms/*.rpm" >&2; exit 1; }; } && \
+        dnf install -y "$@" && \
+        dnf clean all; \
+    fi && \
+    rm -rf /tmp/homelab-rpms
 
 # The tinyproxy sysusers fragment is gone, and its absence has a reason.
 #

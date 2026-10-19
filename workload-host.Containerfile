@@ -98,4 +98,37 @@ docker:
     use-sigstore-attachments: true
 EOF
 
+# Fail the build if the SELinux policy store lacks a module the installed
+# packages load. dnf does not fail a transaction whose %post failed, so a
+# module semodule could not load leaves a green build and an image without it.
+# The expected set is derived from what the packages ship: compiled modules
+# under /usr/share/selinux/packages, and the CIL modules workloadctl's %post
+# loads from /usr/share/workloadctl, each named for its file.
+RUN <<'EOF'
+set -eu
+fail=0
+for debris in /etc/selinux/targeted/tmp /etc/selinux/targeted/previous; do
+    if [ -e "$debris" ]; then
+        echo "$debris exists: a semodule transaction did not complete" >&2
+        fail=1
+    fi
+done
+modules=$(semodule -l)
+for file in /usr/share/selinux/packages/*.pp /usr/share/selinux/packages/*.pp.bz2 \
+            /usr/share/selinux/packages/targeted/*.pp \
+            /usr/share/selinux/packages/targeted/*.pp.bz2 \
+            /usr/share/workloadctl/*.cil; do
+    [ -e "$file" ] || continue
+    name=${file##*/}
+    name=${name%.cil}
+    name=${name%%.pp*}
+    if ! printf '%s\n' "$modules" | grep -qx "$name"; then
+        echo "SELinux module $name is not in the policy store (shipped as $file)" >&2
+        fail=1
+    fi
+done
+[ "$fail" -eq 0 ]
+echo "SELinux policy store OK ($(printf '%s\n' "$modules" | wc -l) modules)"
+EOF
+
 RUN bootc container lint

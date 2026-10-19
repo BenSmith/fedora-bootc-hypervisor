@@ -387,7 +387,8 @@ jobs:
         env:
           VERSION: ${{ matrix.fedora_version }}
         run: |
-          echo "ref=$(bash .forgejo/scripts/verified-ref.sh "${REGISTRY}/negativo-rpms:${VERSION}")" >> "$GITHUB_OUTPUT"
+          ref=$(bash .forgejo/scripts/verified-ref.sh "${REGISTRY}/negativo-rpms:${VERSION}")
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
       - name: Build variant
         if: steps.gate.outputs.build == 'true'

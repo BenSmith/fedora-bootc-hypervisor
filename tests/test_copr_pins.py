@@ -48,6 +48,10 @@ class TestTheImageInstallsThePinnedRPMs(unittest.TestCase):
         self.assertIn('key=$(dirname "$(realpath "$0")")/$project.gpg', fetch)
         self.assertIn("--define '_pkgverify_level signature' -K", fetch)
         self.assertIn('install -m 0644 "$1" "$dest"', fetch)
+        # A package the project builds beside its namesake is checked
+        # against the same key.
+        self.assertIn('package=${4:-$project}', fetch)
+        self.assertIn('--repo="$project" "$package-$version"', fetch)
 
     def test_every_project_fetched_has_its_key(self):
         """A project with no key fails the fetch, and with it every image

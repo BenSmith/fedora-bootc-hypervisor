@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# PROJECT's RPM at VERSION, from the Copr project of that name, to DEST,
-# refused unless it is signed by the project's key beside this script
-# (PROJECT.gpg). The RPMs are noarch, so the one chroot serves every Fedora
-# the images build on. dnf download checks no signature: rpmkeys does, in a
-# keyring of its own, and _pkgverify_level makes it refuse an unsigned
-# package, which plain -K passes on its digests. --refresh, because a
-# version released since dnf last cached this repository's metadata is
-# otherwise not found.
+# PACKAGE's RPM at VERSION, from the Copr project PROJECT, to DEST, refused
+# unless it is signed by the project's key beside this script (PROJECT.gpg).
+# PACKAGE is the project's name unless given. The RPMs are noarch, so the
+# one chroot serves every Fedora the images build on. dnf download checks no
+# signature: rpmkeys does, in a keyring of its own, and _pkgverify_level
+# makes it refuse an unsigned package, which plain -K passes on its digests.
+# --refresh, because a version released since dnf last cached this
+# repository's metadata is otherwise not found.
 set -euo pipefail
-[ "$#" -eq 3 ] || { echo "usage: $0 PROJECT VERSION DEST" >&2; exit 2; }
+[ "$#" -eq 3 ] || [ "$#" -eq 4 ] ||
+  { echo "usage: $0 PROJECT VERSION DEST [PACKAGE]" >&2; exit 2; }
 project=$1
 version=$2
 dest=$3
+package=${4:-$project}
 repo=https://download.copr.fedorainfracloud.org/results/benjamin-coder-smith/$project/fedora-44-x86_64/
 key=$(dirname "$(realpath "$0")")/$project.gpg
 if [ ! -f "$key" ]; then
@@ -21,10 +23,10 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 dnf download -q --refresh --arch=noarch --destdir="$work/rpms" \
-  --repofrompath="$project,$repo" --repo="$project" "$project-$version"
+  --repofrompath="$project,$repo" --repo="$project" "$package-$version"
 set -- "$work"/rpms/*.rpm
 if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
-  echo "expected exactly one $project-$version RPM, got $#:" >&2
+  echo "expected exactly one $package-$version RPM, got $#:" >&2
   ls -l "$work/rpms" >&2
   exit 1
 fi

@@ -163,8 +163,9 @@ build-base: sync-cosy
 
 # WORKLOADCTL_LOCAL=PATH and MOATERY_LOCAL=PATH put a local build in the
 # image in place of the Copr release hypervisor.Containerfile pins. PATH is
-# an RPM, or a checkout: workloadctl's `just rpm-build` builds its RPM here,
-# moatery's `just rpm-image` builds and tests its RPM in a container.
+# an RPM, or a checkout: workloadctl's `just rpm-build` builds its RPMs here,
+# moatery's `just rpm-image` builds and tests its RPM in a container. A
+# workloadctl RPM needs the workloadctl-vm RPM of the same build beside it.
 # Environment variables, not parameters, so they reach this recipe through
 # build-all-local and aio-local.
 build-base-local: sync-cosy
@@ -180,12 +181,20 @@ build-base-local: sync-cosy
     context="$local/workloadctl"
     mkdir "$context"
     if [ -d "$WORKLOADCTL_LOCAL" ]; then
-      built=$(cd "$WORKLOADCTL_LOCAL" && just rpm-build | tail -n 1)
-      cp "$WORKLOADCTL_LOCAL/$built" "$context/workloadctl.rpm"
+      # rpm-build ends by listing both RPMs it built, in no set order.
+      built=$(cd "$WORKLOADCTL_LOCAL" && just rpm-build)
+      main=$(grep -E '^rpmbuild/RPMS/.*/workloadctl-[0-9][^/]*\.rpm$' <<<"$built")
+      vm=$(grep -E '^rpmbuild/RPMS/.*/workloadctl-vm-[0-9][^/]*\.rpm$' <<<"$built")
+      cp "$WORKLOADCTL_LOCAL/$main" "$context/workloadctl.rpm"
+      cp "$WORKLOADCTL_LOCAL/$vm" "$context/workloadctl-vm.rpm"
     else
+      vm=$(rpm -qp --qf 'workloadctl-vm-%{VERSION}-%{RELEASE}.%{ARCH}.rpm' \
+        "$WORKLOADCTL_LOCAL")
       cp "$WORKLOADCTL_LOCAL" "$context/workloadctl.rpm"
+      cp "$(dirname "$WORKLOADCTL_LOCAL")/$vm" "$context/workloadctl-vm.rpm"
     fi
-    echo "workloadctl from $WORKLOADCTL_LOCAL: $(rpm -qp "$context/workloadctl.rpm")"
+    echo "workloadctl from $WORKLOADCTL_LOCAL:" \
+      $(rpm -qp "$context/workloadctl.rpm" "$context/workloadctl-vm.rpm")
     contexts+=(--build-context "workloadctl=$context")
   fi
   if [ -n "${MOATERY_LOCAL:-}" ]; then

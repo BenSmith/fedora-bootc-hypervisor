@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The image installs workloadctl and moatery, which it requires, from their
-Copr projects with each signature checked, and caches both for VM seed ISOs."""
+"""The image installs workloadctl, workloadctl-vm and moatery, which
+workloadctl requires, from their Copr projects with each signature checked."""
 import re
 import unittest
 
@@ -13,10 +13,9 @@ PROJECTS = ("workloadctl", "moatery")
 
 class TestTheImageInstallsThePinnedRPMs(unittest.TestCase):
 
-    def test_each_is_fetched_at_its_pin_installed_and_cached(self):
+    def test_each_is_fetched_at_its_pin_and_installed(self):
         """Each fetch stage is named as its project, fetches it at the
-        version its ARG pins, and the image installs the RPM and caches it
-        where workload-ensure-user reads it for a VM's seed ISO."""
+        version its ARG pins, and the image installs the RPM."""
         containerfile = CONTAINERFILE.read_text()
         install = re.search(r"(?m)^RUN .*\n(?:.*\\\n)*.*dnf install -y (.*) &&",
                             containerfile)
@@ -33,9 +32,20 @@ class TestTheImageInstallsThePinnedRPMs(unittest.TestCase):
                     f"COPY --from={project} /{project}.rpm "
                     f"/tmp/{project}.rpm"), 1)
                 self.assertIn(f"/tmp/{project}.rpm", install.group(1))
-                self.assertIn(f"/tmp/{project}.rpm "
-                              f"/usr/share/workloadctl/{project}.rpm",
-                              containerfile)
+
+    def test_workloadctl_vm_comes_from_workloadctls_project_at_its_pin(self):
+        """workloadctl-vm requires workloadctl at its exact version and
+        release, so it is fetched from the same project at the same pin,
+        and installed in the same transaction."""
+        containerfile = CONTAINERFILE.read_text()
+        install = re.search(r"(?m)^RUN .*\n(?:.*\\\n)*.*dnf install -y (.*) &&",
+                            containerfile)
+        self.assertRegex(containerfile,
+                         r'/tmp/copr/fetch workloadctl "\$\{WORKLOADCTL_VERSION\}" '
+                         r"/workloadctl-vm\.rpm \\\n\s+workloadctl-vm &&")
+        self.assertEqual(containerfile.count(
+            "COPY --from=workloadctl /workloadctl-vm.rpm /tmp/workloadctl-vm.rpm"), 1)
+        self.assertIn("/tmp/workloadctl-vm.rpm", install.group(1))
 
     def test_the_fetch_refuses_what_the_project_key_did_not_sign(self):
         """dnf download checks no signature, so the fetch's rpmkeys is the
@@ -75,6 +85,7 @@ class TestTheImageInstallsThePinnedRPMs(unittest.TestCase):
                 self.assertIn(f'--build-context "{project}=$context"',
                               justfile)
                 self.assertIn(f'"$context/{project}.rpm"', justfile)
+        self.assertIn('"$context/workloadctl-vm.rpm"', justfile)
 
 
 if __name__ == "__main__":

@@ -3,20 +3,22 @@ ARG BASE_IMAGE=ghcr.io/bensmith/fedora-bootc-minimal:latest
 # (fedora-versions.yml). Every caller passes it explicitly (justfile + CI
 # workflows); the default tracks current stable.
 ARG FEDORA_VERSION=44
-# workloadctl's RPM and moatery's, which it requires, each from its Copr
-# project, signature checked against the project's key (copr/fetch). The
-# image installs both and caches both for VM seed ISOs. A workloadctl release
-# that needs a newer moatery than this pins is refused by the image's
-# `dnf install`. `just build-base-local` with WORKLOADCTL_LOCAL or
+# workloadctl's RPMs, workloadctl and workloadctl-vm, and moatery's, which it
+# requires, each from its Copr project, signature checked against the
+# project's key (copr/fetch). A
+# workloadctl release that needs a newer moatery than this pins is refused by
+# the image's `dnf install`. `just build-base-local` with WORKLOADCTL_LOCAL or
 # MOATERY_LOCAL replaces a stage with a named build context of the stage's
-# name, holding a local build's RPM as /workloadctl.rpm or /moatery.rpm.
-ARG WORKLOADCTL_VERSION=0.2.0
+# name, holding a local build's RPMs where the stage leaves them.
+ARG WORKLOADCTL_VERSION=0.2.1
 ARG MOATERY_VERSION=0.9.0
 
 FROM fedora:${FEDORA_VERSION} AS workloadctl
 ARG WORKLOADCTL_VERSION
 COPY copr/ /tmp/copr/
 RUN /tmp/copr/fetch workloadctl "${WORKLOADCTL_VERSION}" /workloadctl.rpm && \
+    /tmp/copr/fetch workloadctl "${WORKLOADCTL_VERSION}" /workloadctl-vm.rpm \
+        workloadctl-vm && \
     rm -rf /tmp/copr
 
 FROM fedora:${FEDORA_VERSION} AS moatery
@@ -411,16 +413,14 @@ RUN if [ "$ENABLE_PASSWORDLESS_SUDO" = "true" ]; then \
         chmod 0440 /etc/sudoers.d/wheel-nopasswd; \
     fi
 
-# Install workload provisioning system and moatery, which it requires. Both
-# RPMs are also cached at a known path so workload-ensure-user can bundle them
-# into VM cloud-init ISOs at runtime.
+# Install workload provisioning system, what its VM workloads run on the
+# host (workloadctl-vm), and moatery, which it requires.
 COPY --from=workloadctl /workloadctl.rpm /tmp/workloadctl.rpm
+COPY --from=workloadctl /workloadctl-vm.rpm /tmp/workloadctl-vm.rpm
 COPY --from=moatery /moatery.rpm /tmp/moatery.rpm
 RUN /usr/libexec/hypervisor-build/selinux-store-copyup && \
-    dnf install -y /tmp/workloadctl.rpm /tmp/moatery.rpm && \
-    install -Dpm 0644 /tmp/workloadctl.rpm /usr/share/workloadctl/workloadctl.rpm && \
-    install -Dpm 0644 /tmp/moatery.rpm /usr/share/workloadctl/moatery.rpm && \
-    rm -f /tmp/workloadctl.rpm /tmp/moatery.rpm && \
+    dnf install -y /tmp/workloadctl.rpm /tmp/workloadctl-vm.rpm /tmp/moatery.rpm && \
+    rm -f /tmp/workloadctl.rpm /tmp/workloadctl-vm.rpm /tmp/moatery.rpm && \
     dnf clean all
 
 # The tinyproxy sysusers fragment is gone, and its absence has a reason.

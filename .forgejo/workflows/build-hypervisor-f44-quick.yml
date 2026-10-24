@@ -15,6 +15,15 @@ name: Build Hypervisor Bootc (F44 quick — amd + nvidia-negativo17)
 
 on:
   workflow_dispatch:
+    inputs:
+      rpms:
+        description: 'workloadctl and moatery: main, from the forge RPM registry, or the Copr releases the Containerfile pins'
+        required: true
+        default: 'forge'
+        type: choice
+        options:
+          - 'forge'
+          - 'copr'
 
 concurrency:
   group: build-hypervisor-f44-quick-${{ github.ref }}
@@ -119,11 +128,39 @@ jobs:
           ref=$(bash .forgejo/scripts/verified-ref.sh "${REGISTRY}/homelab-rpms:latest")
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
+      # workloadctl and moatery as main last published them to this forge's
+      # RPM registry, in place of the Copr releases hypervisor.Containerfile
+      # pins. A dispatch can choose those releases instead.
+      - name: Fetch forge RPMs
+        id: forge
+        if: inputs.rpms != 'copr'
+        env:
+          REPO: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/rpm
+        run: |
+          dir="$GITHUB_WORKSPACE/forge-rpms"
+          rm -rf "$dir"
+          # An assignment, so the script's failure fails the step.
+          commit=$(bash .forgejo/scripts/forge-rpms.sh "$REPO" "$dir")
+          echo "dir=${dir}" >> "$GITHUB_OUTPUT"
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+
       - name: Build base hypervisor
         env:
           HOMELAB_RPMS: ${{ steps.homelab.outputs.ref }}
+          FORGE_RPMS: ${{ steps.forge.outputs.dir }}
+          WORKLOADCTL_COMMIT: ${{ steps.forge.outputs.commit }}
         run: |
-          sudo podman build \
+          # A context named as a fetch stage of hypervisor.Containerfile
+          # replaces the stage.
+          rpms=()
+          if [ -n "$FORGE_RPMS" ]; then
+            rpms=(--build-context "workloadctl=$FORGE_RPMS/workloadctl"
+                  --build-context "moatery=$FORGE_RPMS/moatery")
+          fi
+          if [ -n "$WORKLOADCTL_COMMIT" ]; then
+            rpms+=(--label "workloadctl.commit=$WORKLOADCTL_COMMIT")
+          fi
+          sudo podman build "${rpms[@]}" \
             --pull=newer \
             --security-opt=label=disable \
             --security-opt=seccomp=unconfined \

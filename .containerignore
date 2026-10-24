@@ -36,3 +36,7 @@ __pycache__
 htmlcov
 .mypy_cache
 .ruff_cache
+
+# The Forgejo builds' workloadctl and moatery RPMs (forge-rpms.sh), handed to
+# the build as contexts of their own.
+forge-rpms

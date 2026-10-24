@@ -4,10 +4,12 @@
 # workloadctl's `runtime`-marked checks run against it
 # (`WLRT_MODE=gate just test-runtime`).
 #
-# The harness and the checks are workloadctl's. They are checked out at the
-# release this image pins (hypervisor.Containerfile's ARG WORKLOADCTL_VERSION,
-# tag v<version>), so the image is held to the tests of the workloadctl it
-# ships. Until that tag exists the run uses workloadctl's main, and warns.
+# The harness and the checks are workloadctl's, checked out at the
+# workloadctl the image ships, so the image is held to its own tests: the
+# commit its `workloadctl.commit` label names, which a build from the forge's
+# RPM registry sets, or else the release hypervisor.Containerfile pins (ARG
+# WORKLOADCTL_VERSION, tag v<version>). Until that tag exists the run uses
+# workloadctl's main, and warns.
 #
 # A CADENCE gate, not a PR gate: schedule + manual dispatch only. Forgejo
 # only: it needs registry.local (homelab-internal) and privileged BIB, neither
@@ -47,11 +49,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: workloadctl at the image's pin
+      - name: workloadctl at the image's commit or pin
         id: pin
         env:
           REPO: ${{ github.server_url }}/${{ github.repository_owner }}/workloadctl.git
+          # The harness's default gate image (WLRT_GATE_IMAGE), which it pulls
+          # again, unchanged, to boot.
+          IMAGE: registry.local/hypervisor-bootc:latest
         run: |
+          sudo podman pull -q --tls-verify=false "$IMAGE" >/dev/null
+          commit=$(sudo podman image inspect \
+            --format '{{ index .Labels "workloadctl.commit" }}' "$IMAGE")
+          if [ -n "$commit" ] && [ "$commit" != "<no value>" ]; then
+            echo "ref=${commit}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           version=$(sed -n 's/^ARG WORKLOADCTL_VERSION=//p' hypervisor.Containerfile)
           if [ -z "$version" ]; then
             echo "::error::hypervisor.Containerfile has no ARG WORKLOADCTL_VERSION="

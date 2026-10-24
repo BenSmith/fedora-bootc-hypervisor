@@ -49,7 +49,7 @@ Each inherits from hypervisor-bootc and adds kernel GPU drivers:
 
 [workloadctl](https://github.com/BenSmith/workloadctl) is a standalone tool, developed in its own repository (RPM-packaged, no bootc dependency), that turns declarative TOML configs into isolated workloads across two substrates: rootless podman containers (the common case) and KVM/QEMU VMs (declared with a `[vm]` section). Each workload gets a dedicated system user, subuid namespace, systemd service, volume management, and optional TPM2-encrypted secrets.
 
-See [workloadctl's llms.txt](https://github.com/BenSmith/workloadctl/blob/main/llms.txt) for full detail on architecture, CLI commands, and configuration schema. The image installs the release `ARG WORKLOADCTL_VERSION` pins; `WORKLOADCTL_LOCAL=<checkout or RPM> just build-base-local` builds with a local one.
+See [workloadctl's llms.txt](https://github.com/BenSmith/workloadctl/blob/main/llms.txt) for full detail on architecture, CLI commands, and configuration schema. The image installs the release `ARG WORKLOADCTL_VERSION` pins; `WORKLOADCTL_LOCAL=<checkout or RPM> just build-base-local` builds with a local one, and the Forgejo builds install main's, from the forge's RPM registry.
 
 Quick example:
 ```bash

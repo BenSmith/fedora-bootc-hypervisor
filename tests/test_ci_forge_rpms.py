@@ -2,12 +2,13 @@
 
 Each repository's Forgejo CI publishes main's RPMs to the forge's RPM
 registry. Both Forgejo hypervisor workflows fetch the newest with
-forge-rpms.sh, which refuses a package the registry's key did not sign, and
-hand them to the build as contexts named as hypervisor.Containerfile's fetch
+forge-rpms.sh, and hand them to the build as contexts named as hypervisor.Containerfile's fetch
 stages: a context of any other name is ignored, and the image quietly gets
 the Copr release. The runtime gate checks workloadctl out at the commit the
-image's label names. These run the steps' own scripts, and forge-rpms.sh
-against stand-ins for dnf, rpmkeys and rpm.
+image's label names. The registry signs its metadata, not its packages, so
+dnf checks the metadata against the registry's key and each package against
+the metadata's checksum. These run the steps' own scripts, and
+forge-rpms.sh against stand-ins for dnf and rpm.
 """
 import os
 import re
@@ -27,6 +28,7 @@ BUILD = "Build base hypervisor"
 LABEL = "workloadctl.commit"
 
 DNF = """#!/bin/bash
+[ -z "$STUB_REFUSE" ] || exit 1
 case "$1" in
   repoquery) [ -z "$STUB_VR" ] || echo "$STUB_VR" ;;
   download)
@@ -36,9 +38,6 @@ case "$1" in
       echo "$n" > "$d/$n.noarch.rpm"
     done ;;
 esac
-"""
-RPMKEYS = """#!/bin/bash
-for a; do [ "$a" != -K ] || exit "${STUB_REFUSE:-0}"; done
 """
 RPM = """#!/bin/bash
 printf '%s' "$STUB_VCS"
@@ -61,7 +60,7 @@ class ForgeRpms(unittest.TestCase):
         self.addCleanup(subprocess.run, ["rm", "-rf", str(self.work)])
         self.bin = self.work / "bin"
         self.bin.mkdir()
-        for name, text in (("dnf", DNF), ("rpmkeys", RPMKEYS), ("rpm", RPM)):
+        for name, text in (("dnf", DNF), ("rpm", RPM)):
             (self.bin / name).write_text(text)
             (self.bin / name).chmod(0o755)
 
@@ -96,12 +95,17 @@ class ForgeRpms(unittest.TestCase):
         done, _ = self.fetch()
         self.assertEqual(done.stdout, "")
 
-    def test_a_package_the_key_did_not_sign_is_refused(self):
-        """dnf download checks no signature, and `rpmkeys -K` passes an
-        unsigned package on its digests unless _pkgverify_level says
-        otherwise (copr/fetch, the same check)."""
-        self.assertIn("--define '_pkgverify_level signature' -K",
-                      SCRIPT.read_text())
+    def test_metadata_the_registry_key_did_not_sign_is_refused(self):
+        """The packages are unsigned: gpgcheck would refuse every one, and
+        without repo_gpgcheck nothing is checked at all."""
+        text = SCRIPT.read_text()
+        for opt in ("--setopt=forge.repo_gpgcheck=1",
+                    "--setopt=forge.gpgcheck=0",
+                    '--setopt=forge.gpgkey="file://$key"'):
+            self.assertIn(opt, text)
+        self.assertIn('/../rpm-registry.gpg")', text)
+        self.assertTrue((REPO_ROOT / ".forgejo" / "rpm-registry.gpg").read_text()
+                        .startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----"))
         done, dest = self.fetch(STUB_REFUSE="1")
         self.assertNotEqual(done.returncode, 0)
         self.assertEqual(list(dest.rglob("*.rpm")), [])

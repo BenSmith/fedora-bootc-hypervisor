@@ -256,12 +256,12 @@ Daily automated builds on both forges: `fedora-bootc-minimal`, then every hyperv
 ## Documentation
 
 - [workloadctl README](https://github.com/BenSmith/workloadctl/blob/main/README.md) — Workload system overview
-- [Workload guide](https://github.com/BenSmith/workloadctl/blob/main/docs/workloads.md) — Full configuration reference
+- [The workloadctl manual](https://github.com/BenSmith/workloadctl/blob/main/docs/manual/README.md) — Concepts, containers, VMs, networking, secrets, operating
 - [CLI reference](https://github.com/BenSmith/workloadctl/blob/main/docs/cli.md) — All commands and options
-- [Secrets management](https://github.com/BenSmith/workloadctl/blob/main/docs/secrets.md) — TPM2-encrypted credentials
+- [Secrets](https://github.com/BenSmith/workloadctl/blob/main/docs/manual/07-secrets.md) — TPM2-sealed credentials
 - [Schema reference](https://github.com/BenSmith/workloadctl/blob/main/docs/schema-reference.toml) — Annotated TOML schema
 - [Example configs](https://github.com/BenSmith/workloadctl/tree/main/workloads) — Real-world workload definitions, one bundle per directory
-- [Troubleshooting](https://github.com/BenSmith/workloadctl/blob/main/docs/troubleshooting.md) — Common issues and fixes
+- [Troubleshooting](https://github.com/BenSmith/workloadctl/blob/main/docs/manual/10-troubleshooting.md) — Common issues and fixes
 - [Emergency recovery](docs/emergency-recovery.md) — Boot recovery procedures
 
 ## License

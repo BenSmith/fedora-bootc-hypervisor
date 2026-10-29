@@ -446,27 +446,6 @@ RUN if [ ! -e /tmp/homelab-rpms/none ]; then \
     fi && \
     rm -rf /tmp/homelab-rpms
 
-# The tinyproxy sysusers fragment is gone, and its absence has a reason.
-#
-# workloadctl used to hard-require tinyproxy — one instance per VM workload that
-# set [vm.network].hosts — and tinyproxy-1.11.2-8.fc44 creates its account the
-# legacy way (`groupadd -r` / `useradd -r` in %pre, no sysusers.d fragment).
-# That writes /etc/passwd and /etc/group entries with no declaration behind
-# them, which bootc's `etc-sysusers` lint reports, so this file carried a
-# fragment under /usr/lib to regenerate the account deterministically.
-#
-# workloadctl retired the proxy on 2026-08-25: hostname policy is now a
-# uid-keyed redirect into a per-workload egress inspector that ships inside the
-# workloadctl RPM itself. The `Requires: tinyproxy` is gone with it, nothing
-# else in this image pulls the package in, and a fragment declaring an account
-# for an absent package would create a user nothing on the host can use.
-#
-# Kept as a comment rather than deleted outright because the ORDERING LESSON it
-# produced is still live, and is recorded at the second lint call below: the
-# gap surfaced as a hypervisor-amd build failure, hundreds of layers from its
-# cause. If a future dependency creates accounts the legacy way, that is the
-# shape the failure will take again.
-
 # Bootc-specific: emergency access, cosy
 COPY systemd/emergency-access.conf /usr/lib/systemd/system/emergency.target.d/emergency-access.conf
 
@@ -514,24 +493,12 @@ RUN /usr/libexec/hypervisor-build/selinux-store-verify
 # Lint again, after everything.
 #
 # The lint above runs partway through this file, before the workloadctl RPM and
-# the layers that follow it. So the base image never re-checked the /etc entries
-# its own dependencies create, and a tinyproxy packaging gap surfaced instead as
-# a hypervisor-amd build failure — a lint about a workloadctl dependency,
-# reported by the GPU image, hundreds of layers from its cause. (That specific
-# dependency is gone; the ordering it exposed is not.)
-#
-# The variants have always covered this ground incidentally, by linting on top
-# of the finished base. That is the wrong place to find out: it is a slower
-# feedback loop, it fails three images for one defect, and it points at the
-# wrong file.
-#
-# The earlier call stays where it is rather than moving here. Two lints cost
-# seconds, and keeping the first one means a regression in the packages layer
-# still fails at the packages layer instead of at the bottom of the file.
-#
-# Same three exemptions, deliberately not widened — see the earlier call for
-# what each covers. Verified clean at this point on a full build (10 checks
-# passed, 0 warnings) before this was added, so it carries no accepted debt.
+# the layers that follow it, so it cannot see /etc entries their dependencies
+# create (an account added by `useradd` in %pre rather than a sysusers.d
+# fragment). Without this call, such a defect surfaces only when a variant lints
+# on top of the finished base: three images fail for one defect, pointing at the
+# wrong file. The earlier call stays so a packages-layer regression still fails
+# there. Same three exemptions; see the earlier call for what each covers.
 RUN bootc container lint --fatal-warnings \
     --skip var-tmpfiles --skip var-log --skip nonempty-run-tmp
 

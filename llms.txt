@@ -49,7 +49,7 @@ Each inherits from hypervisor-bootc and adds kernel GPU drivers:
 
 [workloadctl](https://github.com/BenSmith/workloadctl) is a standalone tool, developed in its own repository (RPM-packaged, no bootc dependency), that turns declarative TOML configs into isolated workloads across two substrates: rootless podman containers (the common case) and KVM/QEMU VMs (declared with a `[vm]` section). Each workload gets a dedicated system user, subuid namespace, systemd service, volume management, and optional TPM2-encrypted secrets.
 
-See [workloadctl's llms.txt](https://github.com/BenSmith/workloadctl/blob/main/llms.txt) for full detail on architecture, CLI commands, and configuration schema. The image installs the release `ARG WORKLOADCTL_VERSION` pins; `WORKLOADCTL_LOCAL=<checkout or RPM> just build-base-local` builds with a local one, and the Forgejo builds install main's, from the forge's RPM registry.
+[workloadctl's llms.txt](https://github.com/BenSmith/workloadctl/blob/main/llms.txt) maps its manual, CLI and schema references. The image installs the release `ARG WORKLOADCTL_VERSION` pins; `WORKLOADCTL_LOCAL=<checkout or RPM> just build-base-local` builds with a local one, and the Forgejo builds install main's, from the forge's RPM registry.
 
 Quick example:
 ```bash
@@ -210,10 +210,10 @@ sudo bootc switch ghcr.io/bensmith/hypervisor-amd:44
 ## Documentation
 
 - [workloadctl README](https://github.com/BenSmith/workloadctl/blob/main/README.md) — Workload system overview and quick start
-- [workloadctl workload guide](https://github.com/BenSmith/workloadctl/blob/main/docs/workloads.md) — Full configuration guide
+- [workloadctl manual](https://github.com/BenSmith/workloadctl/blob/main/docs/manual/README.md) — Concepts, containers, VMs, networking, secrets, operating
 - [workloadctl CLI reference](https://github.com/BenSmith/workloadctl/blob/main/docs/cli.md) — CLI reference
-- [workloadctl secrets](https://github.com/BenSmith/workloadctl/blob/main/docs/secrets.md) — Secrets management
-- [workloadctl troubleshooting](https://github.com/BenSmith/workloadctl/blob/main/docs/troubleshooting.md) — Common workload issues and fixes
+- [workloadctl secrets](https://github.com/BenSmith/workloadctl/blob/main/docs/manual/07-secrets.md) — Secrets management
+- [workloadctl troubleshooting](https://github.com/BenSmith/workloadctl/blob/main/docs/manual/10-troubleshooting.md) — Common workload issues and fixes
 - [docs/emergency-recovery.md](docs/emergency-recovery.md) — Boot recovery
 
 ## License

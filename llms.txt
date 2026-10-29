@@ -121,6 +121,7 @@ registries.conf.d/mirrors.conf            Route public-registry pulls through th
                                           that CA is what proves the responder is the real cache
 registries.d/*.yaml                       use-sigstore-attachments for ghcr.io and registry.local
 tmpfiles.d/fail2ban-statedir.conf         Recreate /var/lib/fail2ban at boot (bootc ships /var empty)
+tmpfiles.d/logrotate-statedir.conf        Recreate /var/lib/logrotate at boot (bootc ships /var empty)
 ca-trust-inject/                          Empty in git; CI drops the homelab root CA here to bake it into
                                           homelab images' trust store (README explains the scheme)
 desktop-containers/                       Four cosy build contexts (labwc/wayfire x kms/nested), COPY'd to

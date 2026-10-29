@@ -58,6 +58,9 @@ COPY containers.conf.d/10-pasta-no-splice.conf /etc/containers/containers.conf.d
 # fail2ban's /var/lib/fail2ban state dir is emptied with the rest of /var during
 # the build; recreate it at boot so fail2ban-server can open its sqlite db.
 COPY tmpfiles.d/fail2ban-statedir.conf /usr/lib/tmpfiles.d/fail2ban-statedir.conf
+# Same for logrotate's /var/lib/logrotate state dir, or logrotate.service fails
+# nightly creating logrotate.status.
+COPY tmpfiles.d/logrotate-statedir.conf /usr/lib/tmpfiles.d/logrotate-statedir.conf
 # ssh: passwords from the LAN only, and fail2ban's sshd jail. 20- sorts
 # before 40-workloadctl.conf and 50-redhat.conf: sshd keeps the first value.
 # SSHD_PASSWORD_ADDRESSES: the addresses and CIDR ranges that may log in with

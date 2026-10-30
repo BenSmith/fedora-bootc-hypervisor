@@ -113,17 +113,26 @@ RUN printf 'uinput\n' > /usr/lib/modules-load.d/uinput.conf && \
 # stranger's network, and a mirror entry there is at best inert and at worst a
 # hijack of every docker.io/ghcr.io/quay.io pull. So the mirror ships only
 # where the anchor that secures it also ships.
+#
+# workloadctl's bundle trust policy (`workloadctl bundle add` from a registry)
+# rides the same gate: it trusts registry.local bundles signed with this
+# image's cosign key, and registry.local means nothing without the homelab
+# CA. The public image ships none, so it refuses every OCI bundle until the
+# admin writes one.
 COPY ca-trust-inject/ /tmp/ca-trust-inject/
 COPY registries.conf.d/mirrors.conf /tmp/mirrors.conf
+COPY workloadctl/bundle-policy.json /tmp/bundle-policy.json
 RUN if ls /tmp/ca-trust-inject/*.crt >/dev/null 2>&1; then \
         cp /tmp/ca-trust-inject/*.crt /etc/pki/ca-trust/source/anchors/ && \
         update-ca-trust && \
         install -Dpm 0644 /tmp/mirrors.conf \
             /etc/containers/registries.conf.d/mirrors.conf && \
-        echo "Installed CI-injected trust anchors + registry.local mirror"; \
+        install -Dpm 0644 /tmp/bundle-policy.json \
+            /etc/workloadctl/bundle-policy.json && \
+        echo "Installed CI-injected trust anchors, registry.local mirror and bundle policy"; \
     else \
-        echo "No CI-injected trust anchors; skipping the registry.local mirror"; \
-    fi && rm -rf /tmp/ca-trust-inject /tmp/mirrors.conf
+        echo "No CI-injected trust anchors; skipping the registry.local mirror and bundle policy"; \
+    fi && rm -rf /tmp/ca-trust-inject /tmp/mirrors.conf /tmp/bundle-policy.json
 # KNOWN GAP, no image-side fix: the `update-ca-trust` above does not reach an
 # existing host whose trust store was ever edited by hand. It writes the
 # extracted bundle into /etc/pki/ca-trust/extracted/, and `update-ca-trust` run

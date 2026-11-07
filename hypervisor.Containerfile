@@ -10,8 +10,8 @@ ARG FEDORA_VERSION=44
 # the image's `dnf install`. `just build-base-local` with WORKLOADCTL_LOCAL or
 # MOATERY_LOCAL replaces a stage with a named build context of the stage's
 # name, holding a local build's RPMs where the stage leaves them.
-ARG WORKLOADCTL_VERSION=0.2.1
-ARG MOATERY_VERSION=0.9.0
+ARG WORKLOADCTL_VERSION=0.3.0
+ARG MOATERY_VERSION=0.10.0
 # Packages the homelab adds to its images: an image holding RPMs under /rpms,
 # registry.local/homelab-rpms, published by a homelab repository. The Forgejo
 # builds pass its verified digest; every other build installs none.

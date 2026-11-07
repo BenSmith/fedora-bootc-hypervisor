@@ -14,7 +14,8 @@ import unittest
 from tests import REPO_ROOT
 
 WORKFLOWS = sorted((REPO_ROOT / ".forgejo" / "workflows").glob("*.yml"))
-HYPERVISOR = ("build-hypervisor.yml", "build-hypervisor-f44-quick.yml")
+HYPERVISOR = ("build-hypervisor.yml", "build-hypervisor-f44-quick.yml",
+              "build-hypervisor-f45-quick.yml")
 NAMING = "Name this job's local images"
 
 
@@ -73,7 +74,7 @@ class SharedRunner(unittest.TestCase):
                         self.assertIn("NAME: ${{ matrix.variant.name }}",
                                       first)
                     named += 1
-        self.assertEqual(named, 4)
+        self.assertEqual(named, 6)
 
 
 if __name__ == "__main__":

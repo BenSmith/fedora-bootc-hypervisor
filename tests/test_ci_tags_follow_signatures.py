@@ -40,8 +40,8 @@ class TagsFollowSignatures(unittest.TestCase):
                     self.assertIsNotNone(verified, "never verifies the digest")
                     self.assertLess(verified.start(), first_copy)
         # GitHub: minimal, base, variant. Forgejo: minimal, base and variant
-        # in both hypervisor workflows, negativo-rpms.
-        self.assertEqual(publishing, 9)
+        # in all three hypervisor workflows, negativo-rpms.
+        self.assertEqual(publishing, 11)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ source*:
 
 - The **Forgejo** pipeline writes the homelab root CA here from the
   `HOMELAB_ROOT_CA` repo/org secret before building (see
-  `.forgejo/workflows/build-hypervisor.yml` and its `-f44-quick` variant).
+  `.forgejo/workflows/build-hypervisor.yml` and its `-f44-quick` and `-f45-quick` variants).
   The homelab images then trust
   the shared homelab CA out of the box — every `*.local` service fronted by Caddy
   validates with no per-host import. With the secret unset that step fails the

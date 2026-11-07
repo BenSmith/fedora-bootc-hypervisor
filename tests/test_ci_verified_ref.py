@@ -39,8 +39,8 @@ class VerifiedRef(unittest.TestCase):
 
     def test_every_resolve_step_fails_when_the_image_does_not_verify(self):
         found = resolve_steps()
-        # Both hypervisor workflows: homelab packages, negativo17 packages.
-        self.assertEqual(len(found), 4)
+        # All three hypervisor workflows: homelab and negativo17 packages.
+        self.assertEqual(len(found), 6)
         for where, run in found.items():
             with self.subTest(where=where), tempfile.TemporaryDirectory() as work:
                 stub = Path(work) / SCRIPT

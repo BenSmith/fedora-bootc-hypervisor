@@ -13,6 +13,7 @@ OS_SCAN = REPO_ROOT / ".forgejo" / "scripts" / "ci-os-scan.sh"
 class OsImages(unittest.TestCase):
 
     JOBS = {"build-hypervisor.yml": 2, "build-hypervisor-f44-quick.yml": 2,
+            "build-hypervisor-f45-quick.yml": 2,
             "build-minimal-bootc.yml": 1}
 
     def test_every_rechunked_image_is_scanned_before_its_push(self):

@@ -139,7 +139,7 @@ docs/
                                           image-test.yml (PR gate)
 .forgejo/workflows/                       Mirrors of the above (minimal daily 07:00 UTC, hypervisor 09:00) plus Forgejo-only:
                                           seal-signing-key.yml, runtime-gate.yml (weekly Tue; the image under
-                                          workloadctl's runtime checks), build-hypervisor-f44-quick.yml. No
+                                          workloadctl's runtime checks), build-hypervisor-f44-quick.yml and -f45-quick. No
                                           drift check between the forges. The bundle images are workloadctl's
                                           repository's to build, with the key seal-signing-key.yml seals.
                                           Their base builds also install the RPMs in registry.local/homelab-rpms

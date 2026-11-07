@@ -1,10 +1,11 @@
 ARG BASE=ghcr.io/bensmith/hypervisor-bootc:latest
 ARG BASE_DIGEST=""
 # Where the negativo17 packages come from. Unset, they come from negativo17.org.
-# The Forgejo builds pass the verified digest of registry.local/negativo-rpms
-# (negativo17-rpms.Containerfile): a dnf repository at /repo, which the two
-# install steps below bind-mount and point fedora-nvidia at for that one
-# command. The shipped fedora-nvidia.repo is the same either way.
+# A Forgejo build dispatched with nvidia_rpms=mirror passes the verified
+# digest of registry.local/negativo-rpms (negativo17-rpms.Containerfile): a
+# dnf repository at /repo, which the two install steps below bind-mount and
+# point fedora-nvidia at for that one command. The shipped fedora-nvidia.repo
+# is the same either way.
 ARG NVIDIA_RPMS=nvidia-rpms-none
 
 FROM scratch AS nvidia-rpms-none

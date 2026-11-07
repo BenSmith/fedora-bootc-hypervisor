@@ -24,6 +24,14 @@ on:
         options:
           - 'forge'
           - 'copr'
+      nvidia_rpms:
+        description: 'negativo17 driver packages: from negativo17.org, or from the registry.local/negativo-rpms mirror (publish-negativo-rpms)'
+        required: true
+        default: 'negativo17.org'
+        type: choice
+        options:
+          - 'negativo17.org'
+          - 'mirror'
 
 concurrency:
   group: build-hypervisor-f44-quick-${{ github.ref }}
@@ -313,12 +321,13 @@ jobs:
           # signed image, so the checksum is the pin. Re-pin with `just update-cosy`.
           sha256sum -c cosy.sha256
 
-      # The negativo17 driver comes from the published image, not negativo17.org
-      # (negativo17-rpms.Containerfile). Absent or unsigned fails the job; run
-      # publish-negativo-rpms for this Fedora version.
+      # With nvidia_rpms=mirror the negativo17 driver comes from the published
+      # image (negativo17-rpms.Containerfile), not negativo17.org. Absent or
+      # unsigned fails the job; run publish-negativo-rpms for this Fedora
+      # version. Scheduled runs have no inputs and take negativo17.org.
       - name: Resolve negativo17 packages
         id: nvidia
-        if: matrix.variant.name == 'nvidia-negativo17'
+        if: matrix.variant.name == 'nvidia-negativo17' && inputs.nvidia_rpms == 'mirror'
         run: |
           ref=$(bash .forgejo/scripts/verified-ref.sh "${REGISTRY}/negativo-rpms:${VERSION}")
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"

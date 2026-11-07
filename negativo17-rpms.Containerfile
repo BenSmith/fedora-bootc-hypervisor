@@ -1,11 +1,12 @@
 # negativo17's NVIDIA driver packages as an image: FROM scratch, holding a dnf
 # repository at /repo (the RPMs, their repodata, and the key that signs them).
 # publish-negativo-rpms.yml builds, signs and pushes it as
-# registry.local/negativo-rpms; the Forgejo builds of
-# hypervisor-nvidia-negativo17.Containerfile install from it rather than from
-# negativo17.org, which throttles each connection to tens of KB/s, enough to
-# time a CI dnf step out. The driver version is therefore whatever was last
-# published: re-run the publish workflow to take a new one.
+# registry.local/negativo-rpms; a Forgejo build of
+# hypervisor-nvidia-negativo17.Containerfile dispatched with nvidia_rpms=mirror
+# installs from it rather than from negativo17.org, which can throttle each
+# connection to tens of KB/s, enough to time a CI dnf step out. The driver
+# version is then whatever was last published: re-run the publish workflow to
+# take a new one.
 #
 # Every RPM must carry a valid signature from negativo17/RPM-GPG-KEY-slaanesh
 # (fingerprint 0C5D 0F47 0484 AE2F C40A 9B65 97F3 0089 93E8 909B), or the build

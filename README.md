@@ -96,7 +96,7 @@ hypervisor-amd:44                      # Per-version floating (AMD)
 hypervisor-amd:latest                  # Stable Fedora version (AMD)
 ```
 
-`:latest` / `:rpmfusion` / `:negativo17` always track the stable Fedora version. Pin to a specific version using the bare version number (`:43`, `:44`). Supported versions are defined in [`fedora-versions.yml`](fedora-versions.yml).
+`:latest` / `:rpmfusion` / `:negativo17` always track the stable Fedora version. Pin to a specific version using the bare version number (`:43`, `:44`, `:45`). Supported versions are defined in [`fedora-versions.yml`](fedora-versions.yml).
 
 ## Workload System (workloadctl)
 

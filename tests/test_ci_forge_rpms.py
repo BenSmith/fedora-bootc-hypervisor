@@ -28,6 +28,7 @@ BUILD = "Build base hypervisor"
 LABEL = "workloadctl.commit"
 
 DNF = """#!/bin/bash
+echo "$@" >> "$STUB_ARGS"
 [ -z "$STUB_REFUSE" ] || exit 1
 case "$1" in
   repoquery) [ -z "$STUB_VR" ] || echo "$STUB_VR" ;;
@@ -66,12 +67,13 @@ class ForgeRpms(unittest.TestCase):
 
     def env(self, **extra):
         return {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}",
-                "STUB_VR": "1.0-1", "STUB_VCS": "(none)", **extra}
+                "STUB_VR": "1.0-1", "STUB_VCS": "(none)",
+                "STUB_ARGS": str(self.work / "dnf-args"), **extra}
 
     def fetch(self, **extra):
         dest = self.work / "dest"
         done = subprocess.run(["bash", str(SCRIPT), "https://forge.example/rpm",
-                               str(dest)], env=self.env(**extra),
+                               "45", str(dest)], env=self.env(**extra),
                               capture_output=True, text=True)
         return done, dest
 
@@ -87,6 +89,28 @@ class ForgeRpms(unittest.TestCase):
                 self.assertIn(f"COPY --from={stage} /{rpm}.rpm ", containerfile)
                 self.assertEqual((dest / stage / f"{rpm}.rpm").read_text(),
                                  built + "\n")
+
+    def test_it_reads_the_group_of_the_fedora_it_builds_for(self):
+        """moatery installs into its Fedora's Python: a Fedora 45 image
+        (Python 3.15) refused the Fedora 44 build the runner had made."""
+        done, _ = self.fetch()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        calls = (self.work / "dnf-args").read_text().splitlines()
+        self.assertEqual(len(calls), 2)
+        for call in calls:
+            self.assertIn(
+                "--repofrompath=forge,https://forge.example/rpm/fedora-45 ",
+                call)
+
+    def test_each_workflow_passes_the_version_it_builds(self):
+        for workflow in HYPERVISOR:
+            with self.subTest(workflow=workflow):
+                step = base_steps(workflow)[FETCH]
+                self.assertIn('forge-rpms.sh "$REPO" "$VERSION" "$dir"', step)
+                text = (WORKFLOWS / workflow).read_text()
+                self.assertTrue(
+                    "VERSION: ${{ matrix.fedora_version }}" in step
+                    or "\n  VERSION: '" in text)
 
     def test_it_prints_the_commit_the_workloadctl_rpm_names(self):
         done, _ = self.fetch(STUB_VCS="0123abc")

@@ -201,7 +201,7 @@ build-base-local: sync-cosy
     context="$local/moatery"
     mkdir "$context"
     if [ -d "$MOATERY_LOCAL" ]; then
-      (cd "$MOATERY_LOCAL" && just rpm-image)
+      (cd "$MOATERY_LOCAL" && FEDORA_VERSION={{fedora_version}} just rpm-image)
       image="localhost/moatery-rpm:$(cat "$MOATERY_LOCAL/VERSION")"
       ctr=$(podman create "$image" none)
       podman cp "$ctr:/moatery.rpm" "$context/moatery.rpm"

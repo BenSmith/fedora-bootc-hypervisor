@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # PACKAGE's RPM at VERSION, from the Copr project PROJECT, to DEST, refused
 # unless it is signed by the project's key beside this script (PROJECT.gpg).
-# PACKAGE is the project's name unless given. The RPMs are noarch, so the
-# one chroot serves every Fedora the images build on. dnf download checks no
+# PACKAGE is the project's name unless given. The chroot is the Fedora this
+# runs on, the fetch stage's: moatery installs into its Fedora's Python, so
+# another Fedora's build does not install. dnf download checks no
 # signature: rpmkeys does, in a keyring of its own, and _pkgverify_level
 # makes it refuse an unsigned package, which plain -K passes on its digests.
 # --refresh, because a version released since dnf last cached this
@@ -14,7 +15,8 @@ project=$1
 version=$2
 dest=$3
 package=${4:-$project}
-repo=https://download.copr.fedorainfracloud.org/results/benjamin-coder-smith/$project/fedora-44-x86_64/
+. /etc/os-release
+repo=https://download.copr.fedorainfracloud.org/results/benjamin-coder-smith/$project/fedora-$VERSION_ID-x86_64/
 key=$(dirname "$(realpath "$0")")/$project.gpg
 if [ ! -f "$key" ]; then
   echo "no signing key for $project at $key: commit the Copr project's key" >&2

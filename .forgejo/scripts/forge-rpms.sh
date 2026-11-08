@@ -1,17 +1,19 @@
 #!/bin/bash
-# The newest workloadctl, workloadctl-vm and moatery in REPO, a Forgejo RPM
-# registry, under DEST as the build contexts that stand in for
+# The newest workloadctl, workloadctl-vm and moatery for Fedora FEDORA in
+# REPO, a Forgejo RPM registry, under DEST as the build contexts that stand in for
 # hypervisor.Containerfile's workloadctl and moatery stages. Prints the commit
 # the workloadctl RPM names, or nothing when it names none.
 #
 # The registry signs its metadata, not its packages: dnf refuses metadata
 # the registry's key (rpm-registry.gpg) did not sign, and a package whose
-# checksum is not the one the metadata names.
+# checksum is not the one the metadata names. moatery installs into its
+# Fedora's Python, so the registry holds a build per Fedora, each in the
+# group fedora-<version> with the workloadctl RPMs beside it.
 #
-#   bash .forgejo/scripts/forge-rpms.sh "$SERVER/api/packages/$OWNER/rpm" DEST
+#   bash .forgejo/scripts/forge-rpms.sh "$SERVER/api/packages/$OWNER/rpm" FEDORA DEST
 set -euo pipefail
-repo=$1
-dest=$2
+repo=$1/fedora-$2
+dest=$3
 key=$(realpath "$(dirname "$0")/../rpm-registry.gpg")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

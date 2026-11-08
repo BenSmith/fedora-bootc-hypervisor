@@ -148,7 +148,7 @@ jobs:
           dir="$GITHUB_WORKSPACE/forge-rpms"
           rm -rf "$dir"
           # An assignment, so the script's failure fails the step.
-          commit=$(bash .forgejo/scripts/forge-rpms.sh "$REPO" "$dir")
+          commit=$(bash .forgejo/scripts/forge-rpms.sh "$REPO" "$VERSION" "$dir")
           echo "dir=${dir}" >> "$GITHUB_OUTPUT"
           echo "commit=${commit}" >> "$GITHUB_OUTPUT"
 

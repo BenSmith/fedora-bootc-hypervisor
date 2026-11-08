@@ -61,6 +61,8 @@ COPY tmpfiles.d/fail2ban-statedir.conf /usr/lib/tmpfiles.d/fail2ban-statedir.con
 # Same for logrotate's /var/lib/logrotate state dir, or logrotate.service fails
 # nightly creating logrotate.status.
 COPY tmpfiles.d/logrotate-statedir.conf /usr/lib/tmpfiles.d/logrotate-statedir.conf
+# And libvirt's /var/lib/libvirt/secrets, for its secrets-encryption key.
+COPY tmpfiles.d/libvirt-secrets.conf /usr/lib/tmpfiles.d/libvirt-secrets.conf
 # ssh: passwords from the LAN only, and fail2ban's sshd jail. 20- sorts
 # before 40-workloadctl.conf and 50-redhat.conf: sshd keeps the first value.
 # SSHD_PASSWORD_ADDRESSES: the addresses and CIDR ranges that may log in with
